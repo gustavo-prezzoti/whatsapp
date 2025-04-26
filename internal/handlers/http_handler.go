@@ -46,13 +46,14 @@ func NewHTTPHandler(manager *services.ConnectionManager) *HTTPHandler {
 // @Router /upload [post]
 func (h *HTTPHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if h.s3Service == nil {
+		utils.LogError("Serviço S3 não está disponível em /upload")
 		models.RespondWithJSON(w, http.StatusInternalServerError,
 			models.NewErrorResponse("Serviço S3 não está disponível"))
 		return
 	}
 
-	// Parse do formulário multipart com limite de 10MB
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		utils.LogError("Arquivo muito grande em /upload: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest,
 			models.NewErrorResponse("Arquivo muito grande. Limite de 10MB"))
 		return
@@ -60,21 +61,21 @@ func (h *HTTPHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	file, handler, err := r.FormFile("file")
 	if err != nil {
+		utils.LogError("Erro ao processar arquivo em /upload: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest,
 			models.NewErrorResponse("Erro ao processar arquivo"))
 		return
 	}
 	defer file.Close()
 
-	// Upload para o S3
 	fileUrl, err := h.s3Service.UploadFile(file, handler)
 	if err != nil {
+		utils.LogError("Erro ao fazer upload em /upload: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError,
 			models.NewErrorResponse(fmt.Sprintf("Erro ao fazer upload: %v", err)))
 		return
 	}
 
-	// Retornar URL do arquivo
 	response := map[string]string{
 		"path": fileUrl,
 	}
@@ -94,18 +95,21 @@ func (h *HTTPHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var req models.MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /send-message: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	service, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao obter conexão no /send-message: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
 		return
 	}
 
 	err = service.SendMessage(req.SectorID, req.Recipient, req.Message)
 	if err != nil {
+		utils.LogError("Erro ao enviar mensagem no /send-message: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar mensagem: "+err.Error()))
 		return
 	}
@@ -129,31 +133,33 @@ func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendImage(w http.ResponseWriter, r *http.Request) {
 	var req models.MediaMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	service, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao obter conexão no /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
 		return
 	}
 
-	// Remove o prefixo do base64 se existir
 	base64Data := req.Base64File
 	if i := strings.Index(base64Data, ";base64,"); i > -1 {
 		base64Data = base64Data[i+8:]
 	}
 
-	// Decodifica o base64
 	imageBytes, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
+		utils.LogError("Erro ao decodificar base64 em /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar base64: "+err.Error()))
 		return
 	}
 
 	err = service.SendImage(req.SectorID, req.Recipient, imageBytes, req.Caption)
 	if err != nil {
+		utils.LogError("Erro ao enviar imagem em /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar imagem: "+err.Error()))
 		return
 	}
@@ -178,31 +184,33 @@ func (h *HTTPHandler) SendImage(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendAudio(w http.ResponseWriter, r *http.Request) {
 	var req models.MediaMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	service, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao obter conexão no /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
 		return
 	}
 
-	// Remove o prefixo do base64 se existir
 	base64Data := req.Base64File
 	if i := strings.Index(base64Data, ";base64,"); i > -1 {
 		base64Data = base64Data[i+8:]
 	}
 
-	// Decodifica o base64
 	audioBytes, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
+		utils.LogError("Erro ao decodificar base64 em /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar base64: "+err.Error()))
 		return
 	}
 
 	err = service.SendAudio(req.SectorID, req.Recipient, audioBytes)
 	if err != nil {
+		utils.LogError("Erro ao enviar áudio em /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar áudio: "+err.Error()))
 		return
 	}
@@ -227,25 +235,26 @@ func (h *HTTPHandler) SendAudio(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendDocument(w http.ResponseWriter, r *http.Request) {
 	var req models.MediaMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	service, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao obter conexão no /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
 		return
 	}
 
-	// Remove o prefixo do base64 se existir
 	base64Data := req.Base64File
 	if i := strings.Index(base64Data, ";base64,"); i > -1 {
 		base64Data = base64Data[i+8:]
 	}
 
-	// Decodifica o base64
 	fileBytes, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
+		utils.LogError("Erro ao decodificar base64 em /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar base64: "+err.Error()))
 		return
 	}
@@ -254,6 +263,7 @@ func (h *HTTPHandler) SendDocument(w http.ResponseWriter, r *http.Request) {
 
 	err = service.SendDocument(req.SectorID, req.Recipient, fileBytes, req.FileName)
 	if err != nil {
+		utils.LogError("Erro ao enviar documento em /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar documento: "+err.Error()))
 		return
 	}
@@ -279,18 +289,21 @@ func (h *HTTPHandler) SendDocument(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendTyping(w http.ResponseWriter, r *http.Request) {
 	var req models.TypingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /send-typing: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	service, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao obter conexão no /send-typing: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
 		return
 	}
 
 	err = service.SendTyping(req.Recipient, req.Duration)
 	if err != nil {
+		utils.LogError("Erro ao enviar status de digitação em /send-typing: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar status de digitação: "+err.Error()))
 		return
 	}
@@ -314,18 +327,21 @@ func (h *HTTPHandler) SendTyping(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	sectorID := r.URL.Query().Get("sector_id")
 	if sectorID == "" {
+		utils.LogError("sector_id não informado em /qrcode")
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Por favor, informe o ID do setor para gerar o QR Code"))
 		return
 	}
 
 	var id int
 	if _, err := fmt.Sscanf(sectorID, "%d", &id); err != nil {
+		utils.LogError("ID do setor inválido em /qrcode: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("O ID do setor deve ser um número válido"))
 		return
 	}
 
 	status, err := h.connectionManager.GetConnectionStatus(id)
 	if err != nil {
+		utils.LogError("Erro ao obter status da conexão em /qrcode: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Não foi possível verificar o status do setor. Por favor, tente novamente."))
 		return
 	}
@@ -339,15 +355,16 @@ func (h *HTTPHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tentar obter a conexão primeiro (isso irá criar se não existir)
 	_, err = h.connectionManager.GetConnection(id)
 	if err != nil {
+		utils.LogError("Erro ao estabelecer conexão em /qrcode: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Não foi possível estabelecer uma conexão com o WhatsApp. Por favor, tente novamente em alguns instantes."))
 		return
 	}
 
 	qrCode, err := h.connectionManager.GetQRCode(id)
 	if err != nil {
+		utils.LogError("Erro ao obter QR Code em /qrcode: %v", err)
 		models.RespondWithJSON(w, http.StatusNotFound, models.NewErrorResponse("O QR Code ainda não está disponível. Por favor, aguarde alguns segundos e tente novamente."))
 		return
 	}
@@ -387,18 +404,21 @@ func (h *HTTPHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) GetQRCodeBase64(w http.ResponseWriter, r *http.Request) {
 	sectorID := r.URL.Query().Get("sector_id")
 	if sectorID == "" {
+		utils.LogError("sector_id não informado em /qrcode-base64")
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Por favor, informe o ID do setor para gerar o QR Code"))
 		return
 	}
 
 	var id int
 	if _, err := fmt.Sscanf(sectorID, "%d", &id); err != nil {
+		utils.LogError("ID do setor inválido em /qrcode-base64: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("O ID do setor deve ser um número válido"))
 		return
 	}
 
 	status, err := h.connectionManager.GetConnectionStatus(id)
 	if err != nil {
+		utils.LogError("Erro ao obter status da conexão em /qrcode-base64: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Não foi possível verificar o status do setor. Por favor, tente novamente."))
 		return
 	}
@@ -412,15 +432,16 @@ func (h *HTTPHandler) GetQRCodeBase64(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tentar obter a conexão primeiro (isso irá criar se não existir)
 	_, err = h.connectionManager.GetConnection(id)
 	if err != nil {
+		utils.LogError("Erro ao estabelecer conexão em /qrcode-base64: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Não foi possível estabelecer uma conexão com o WhatsApp. Por favor, tente novamente em alguns instantes."))
 		return
 	}
 
 	qrCode, err := h.connectionManager.GetQRCode(id)
 	if err != nil {
+		utils.LogError("Erro ao obter QR Code em /qrcode-base64: %v", err)
 		models.RespondWithJSON(w, http.StatusNotFound, models.NewErrorResponse("O QR Code ainda não está disponível. Por favor, aguarde alguns segundos e tente novamente."))
 		return
 	}
@@ -546,17 +567,20 @@ func (h *HTTPHandler) getFileBytes(path string) ([]byte, string, error) {
 func (h *HTTPHandler) MarkContactViewed(w http.ResponseWriter, r *http.Request) {
 	var req models.ViewedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /mark-viewed: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	if req.SectorID == 0 || req.ContactID == 0 {
+		utils.LogError("SectorID e ContactID obrigatórios em /mark-viewed")
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("SectorID e ContactID são obrigatórios"))
 		return
 	}
 
 	err := h.contactRepository.SetViewedByID(req.SectorID, req.ContactID)
 	if err != nil {
+		utils.LogError("Erro ao marcar contato como visualizado em /mark-viewed: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao marcar contato como visualizado: "+err.Error()))
 		return
 	}
@@ -580,17 +604,20 @@ func (h *HTTPHandler) MarkContactViewed(w http.ResponseWriter, r *http.Request) 
 func (h *HTTPHandler) CheckContactViewed(w http.ResponseWriter, r *http.Request) {
 	var req models.ViewedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError("Erro ao decodificar requisição /check-viewed: %v", err)
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
 		return
 	}
 
 	if req.SectorID == 0 {
+		utils.LogError("SectorID obrigatório em /check-viewed")
 		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("SectorID é obrigatório"))
 		return
 	}
 
 	isViewed, err := h.contactRepository.GetViewedStatus(req.SectorID)
 	if err != nil {
+		utils.LogError("Erro ao verificar status de visualização em /check-viewed: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao verificar status de visualização: "+err.Error()))
 		return
 	}

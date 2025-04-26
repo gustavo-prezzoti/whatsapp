@@ -66,7 +66,7 @@ func main() {
 
 	// Configuração do Swagger UI
 	router.PathPrefix("/swagger-ui/").Handler(httpSwagger.Handler(
-		httpSwagger.URL("http://localhost:8081/api/v1/swagger/swagger.json"),
+		httpSwagger.URL("https://unofficial.ligchat.com/api/v1/swagger/swagger.json"),
 		httpSwagger.DeepLinking(true),
 	))
 
@@ -96,9 +96,9 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Println("Server is running on http://localhost:8081")
-		fmt.Println("Swagger JSON available at: http://localhost:8081/api/v1/swagger/swagger.json")
-		fmt.Println("Swagger UI available at: http://localhost:8081/api/v1/swagger-ui/")
+		fmt.Println("Server is running on https://unofficial.ligchat.com")
+		fmt.Println("Swagger JSON available at: https://unofficial.ligchat.com/api/v1/swagger/swagger.json")
+		fmt.Println("Swagger UI available at: https://unofficial.ligchat.com/api/v1/swagger-ui/")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Error starting server: %v", err)
 		}
