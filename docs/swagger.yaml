@@ -1,0 +1,317 @@
+basePath: /api/v1
+definitions:
+  models.AudioMessageRequest:
+    properties:
+      audio_path:
+        example: /path/to/audio.mp3
+        type: string
+      recipient:
+        example: "5511999999999"
+        type: string
+      sector_id:
+        example: 1
+        type: integer
+    type: object
+  models.DocumentMessageRequest:
+    properties:
+      file_path:
+        example: /path/to/document.pdf
+        type: string
+      recipient:
+        example: "5511999999999"
+        type: string
+      sector_id:
+        example: 1
+        type: integer
+    type: object
+  models.ImageMessageRequest:
+    properties:
+      caption:
+        example: Legenda da imagem
+        type: string
+      image_path:
+        example: /path/to/image.jpg
+        type: string
+      recipient:
+        example: "5511999999999"
+        type: string
+      sector_id:
+        example: 1
+        type: integer
+    type: object
+  models.MessageRequest:
+    properties:
+      message:
+        example: Olá, como vai?
+        type: string
+      recipient:
+        example: "5511999999999"
+        type: string
+      sector_id:
+        example: 1
+        type: integer
+    type: object
+  models.TypingRequest:
+    properties:
+      duration:
+        default: 5
+        example: 5
+        type: integer
+      recipient:
+        example: "5511999999999"
+        type: string
+      sector_id:
+        example: 1
+        type: integer
+    type: object
+host: localhost:8081
+info:
+  contact: {}
+  description: A WhatsApp bot API that supports sending messages, images, audio, and
+    documents
+  title: WhatsApp Bot API
+  version: "1.0"
+paths:
+  /qrcode:
+    get:
+      description: Get QR code as PNG image for WhatsApp login
+      parameters:
+      - description: ID do setor para gerar o QR code
+        in: query
+        minimum: 1
+        name: sector_id
+        required: true
+        type: integer
+      produces:
+      - image/png
+      responses:
+        "200":
+          description: QR code em formato PNG
+          schema:
+            type: file
+        "400":
+          description: Erro de requisição inválida
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: QR code não encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get QR Code
+      tags:
+      - authentication
+  /qrcode-base64:
+    get:
+      description: Get QR code as base64 string for WhatsApp login
+      parameters:
+      - description: ID do setor para gerar o QR code
+        in: query
+        minimum: 1
+        name: sector_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: QR code em base64 e status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Erro de requisição inválida
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: QR code não encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get QR Code Base64
+      tags:
+      - authentication
+  /send-audio:
+    post:
+      consumes:
+      - application/json
+      description: Send an audio file to a WhatsApp contact
+      parameters:
+      - description: Audio message details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AudioMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send an audio file
+      tags:
+      - messages
+  /send-document:
+    post:
+      consumes:
+      - application/json
+      description: Send a document file to a WhatsApp contact
+      parameters:
+      - description: Document message details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DocumentMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send a document
+      tags:
+      - messages
+  /send-image:
+    post:
+      consumes:
+      - application/json
+      description: Send an image with optional caption to a WhatsApp contact
+      parameters:
+      - description: Image message details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ImageMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send an image
+      tags:
+      - messages
+  /send-message:
+    post:
+      consumes:
+      - application/json
+      description: Send a text message to a WhatsApp contact
+      parameters:
+      - description: Message details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.MessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send a text message
+      tags:
+      - messages
+  /send-typing:
+    post:
+      consumes:
+      - application/json
+      description: Send a typing indication to a WhatsApp contact with specified duration
+      parameters:
+      - description: Typing indication details with duration in seconds
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TypingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send typing indication
+      tags:
+      - messages
+  /status:
+    get:
+      description: Check if WhatsApp is connected
+      parameters:
+      - description: ID do setor para verificar o status
+        in: query
+        minimum: 1
+        name: sector_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Status da conexão
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Erro de requisição inválida
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check Connection Status
+      tags:
+      - authentication
+swagger: "2.0"

@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: #f0f2f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .message-input-container {
+            display: flex;
+            gap: 10px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            align-items: center;
+        }
+        .media-preview-container {
+            display: none;
+            padding: 10px;
+            background-color: #f0f2f5;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .media-preview {
+            max-width: 200px;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+        .media-caption {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .media-info {
+            font-size: 12px;
+            color: #667781;
+            margin-top: 4px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            font-size: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #25D366;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #25D366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #128C7E;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .attachment-button {
+            background: none;
+            padding: 8px;
+            color: #919191;
+            font-size: 24px;
+        }
+        .attachment-button:hover {
+            background-color: #f0f2f5;
+            color: #128C7E;
+        }
+        #status {
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        #qrcode {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+        }
+        #qrcode img {
+            max-width: 256px;
+            height: auto;
+        }
+        .error {
+            background-color: #fef1f2 !important;
+            color: #dc2626;
+        }
+        .success {
+            background-color: #f0fdf4 !important;
+            color: #16a34a;
+        }
+        .warning {
+            background-color: #fffbeb !important;
+            color: #d97706;
+        }
+        .typing-indicator {
+            font-size: 13px;
+            color: #667781;
+            margin-left: 10px;
+            display: none;
+        }
+        .connection-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+        .status-dot.connected {
+            background-color: #25D366;
+        }
+        .message-bubble {
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 4px 0;
+            word-wrap: break-word;
+        }
+        .message-outgoing {
+            background-color: #d9fdd3;
+            align-self: flex-end;
+        }
+        .message-incoming {
+            background-color: white;
+            align-self: flex-start;
+        }
+        .media-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .media-type-label {
+            font-size: 14px;
+            color: #667781;
+            margin-bottom: 4px;
+        }
+        .close-preview {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .media-preview-wrapper {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>WhatsApp Test Client</h2>
+        <div class="connection-info">
+            <div class="status-dot" id="connectionDot"></div>
+            <span id="connectionStatus">Disconnected</span>
+        </div>
+        <div class="input-container">
+            <input type="text" id="sectorId" placeholder="Sector ID" value="3">
+            <button onclick="checkStatus()">Check Status</button>
+            <button onclick="generateQR()">Generate QR</button>
+            <button onclick="connect()" id="connectButton">Connect WebSocket</button>
+        </div>
+        <div id="qrcode"></div>
+        <div class="chat-container" id="chatContainer">
+            <div id="messages"></div>
+            <div class="typing-indicator" id="typingIndicator">
+                Digitando...
+            </div>
+            <div class="media-preview-container" id="mediaPreview">
+                <div class="media-preview-wrapper">
+                    <div class="close-preview" onclick="clearMediaPreview()">×</div>
+                    <div class="media-type-label" id="mediaTypeLabel"></div>
+                    <img class="media-preview" id="previewImage">
+                    <video class="media-preview" id="previewVideo" controls style="display: none;"></video>
+                    <audio class="media-preview" id="previewAudio" controls style="display: none;"></audio>
+                    <div class="media-info" id="mediaInfo"></div>
+                    <input type="text" class="media-caption" id="mediaCaption" placeholder="Add a caption..." style="display: none;">
+                </div>
+            </div>
+            <div class="message-input-container">
+                <input type="text" id="recipient" placeholder="Recipient number (e.g., 5511999999999)">
+                <div class="media-buttons">
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleMediaSelect(this, 'image')">
+                    <input type="file" id="videoInput" accept="video/*" style="display: none;" onchange="handleMediaSelect(this, 'video')">
+                    <input type="file" id="audioInput" accept="audio/*" style="display: none;" onchange="handleMediaSelect(this, 'audio')">
+                    <input type="file" id="documentInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" style="display: none;" onchange="handleMediaSelect(this, 'document')">
+                    <button class="attachment-button" onclick="document.getElementById('imageInput').click()">📷</button>
+                    <button class="attachment-button" onclick="document.getElementById('videoInput').click()">🎥</button>
+                    <button class="attachment-button" onclick="document.getElementById('audioInput').click()">🎵</button>
+                    <button class="attachment-button" onclick="document.getElementById('documentInput').click()">📎</button>
+                </div>
+                <input type="text" id="message" placeholder="Type a message" onkeyup="handleInput(event)" onkeydown="handleKeyDown(event)">
+                <button onclick="sendMessage()" id="sendButton" disabled>Send</button>
+            </div>
+        </div>
+        <div id="status">Status: Initializing...</div>
+    </div>
+
+    <script>
+        let ws;
+        let typingTimeout;
+        let isTyping = false;
+        let qrCheckInterval;
+        let currentMedia = null;
+        const TYPING_DURATION = 3000;
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionDot');
+            const status = document.getElementById('connectionStatus');
+            const connectButton = document.getElementById('connectButton');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                status.textContent = 'Connected';
+                connectButton.disabled = true;
+            } else {
+                dot.classList.remove('connected');
+                status.textContent = 'Disconnected';
+                connectButton.disabled = false;
+            }
+        }
+
+        function updateSendButton() {
+            const recipient = document.getElementById('recipient').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const sendButton = document.getElementById('sendButton');
+            
+            sendButton.disabled = !recipient || (!message && !currentMedia) || !ws || ws.readyState !== WebSocket.OPEN;
+        }
+
+        function handleMediaSelect(input, type) {
+            const file = input.files[0];
+            if (!file) return;
+
+            currentMedia = {
+                file: file,
+                type: type
+            };
+
+            const reader = new FileReader();
+            const previewContainer = document.getElementById('mediaPreview');
+            const previewImage = document.getElementById('previewImage');
+            const previewVideo = document.getElementById('previewVideo');
+            const previewAudio = document.getElementById('previewAudio');
+            const mediaInfo = document.getElementById('mediaInfo');
+            const mediaTypeLabel = document.getElementById('mediaTypeLabel');
+            const mediaCaption = document.getElementById('mediaCaption');
+
+            // Reset all preview elements
+            previewImage.style.display = 'none';
+            previewVideo.style.display = 'none';
+            previewAudio.style.display = 'none';
+            mediaCaption.style.display = 'none';
+
+            // Show file info
+            mediaInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+            
+            switch(type) {
+                case 'image':
+                    mediaTypeLabel.textContent = 'Image Preview';
+                    mediaCaption.style.display = 'block';
+                    reader.onload = (e) => {
+                        previewImage.src = e.target.result;
+                        previewImage.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                    break;
+                case 'video':
+                    mediaTypeLabel.textContent = 'Video Preview';
+                    mediaCaption.style.display = 'block';
+                    reader.onload = (e) => {
+                        previewVideo.src = e.target.result;
+                        previewVideo.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                    break;
+                case 'audio':
+                    mediaTypeLabel.textContent = 'Audio Preview';
+                    reader.onload = (e) => {
+                        previewAudio.src = e.target.result;
+                        previewAudio.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                    break;
+                case 'document':
+                    mediaTypeLabel.textContent = 'Document Selected';
+                    break;
+            }
+
+            previewContainer.style.display = 'block';
+            updateSendButton();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function clearMediaPreview() {
+            currentMedia = null;
+            document.getElementById('mediaPreview').style.display = 'none';
+            document.getElementById('previewImage').src = '';
+            document.getElementById('previewVideo').src = '';
+            document.getElementById('previewAudio').src = '';
+            document.getElementById('mediaCaption').value = '';
+            updateSendButton();
+        }
+
+        function showNotification(message, type = 'error') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = type;
+        }
+
+        async function handleApiResponse(response, successMessage) {
+            const data = await response.json();
+            
+            if (!response.ok || data.status === 'error') {
+                throw new Error(data.message || 'Erro na operação');
+            }
+
+            if (successMessage) {
+                showNotification(successMessage, 'success');
+            }
+            return data;
+        }
+
+        async function checkStatus() {
+            const sectorId = document.getElementById('sectorId').value;
+            try {
+                const response = await fetch(`http://localhost:8081/api/v1/status?sector_id=${sectorId}`);
+                const data = await handleApiResponse(response);
+                
+                showNotification(data.message, data.connected ? 'success' : 'warning');
+                updateConnectionStatus(data.connected);
+            } catch (error) {
+                showNotification(`Erro ao verificar status: ${error.message}`);
+                updateConnectionStatus(false);
+            }
+        }
+
+        async function generateQR() {
+            const sectorId = document.getElementById('sectorId').value;
+            const qrcodeDiv = document.getElementById('qrcode');
+            
+            try {
+                showNotification('Gerando QR Code...', 'warning');
+                
+                const response = await fetch(`http://localhost:8081/api/v1/qrcode?sector_id=${sectorId}`);
+                const data = await handleApiResponse(response);
+                
+                if (data.data.status === 'connected') {
+                    showNotification('WhatsApp já está conectado', 'success');
+                    qrcodeDiv.innerHTML = '';
+                    updateConnectionStatus(true);
+                    return;
+                }
+
+                qrcodeDiv.innerHTML = `<img src="${data.data.qrcode}" alt="QR Code">`;
+                showNotification('Escaneie o QR Code com WhatsApp', 'warning');
+                updateConnectionStatus(false);
+                
+                if (qrCheckInterval) clearInterval(qrCheckInterval);
+                qrCheckInterval = setInterval(checkStatus, 2000);
+            } catch (error) {
+                showNotification(`Erro ao gerar QR code: ${error.message}`);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function connect() {
+            const sectorId = document.getElementById('sectorId').value;
+            if (ws) {
+                ws.close();
+            }
+
+            ws = new WebSocket(`ws://localhost:8081/api/v1/ws/${sectorId}`);
+            
+            ws.onopen = () => {
+                showNotification('WebSocket Conectado', 'success');
+                updateConnectionStatus(true);
+                updateSendButton();
+            };
+            
+            ws.onclose = () => {
+                showNotification('WebSocket Desconectado', 'warning');
+                updateConnectionStatus(false);
+                updateSendButton();
+            };
+            
+            ws.onerror = () => {
+                showNotification('Erro no WebSocket - Certifique-se que o WhatsApp está conectado', 'error');
+                updateConnectionStatus(false);
+                updateSendButton();
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+                
+                if (data.type === 'typing_status') {
+                    const typingIndicator = document.getElementById('typingIndicator');
+                    typingIndicator.style.display = data.data.is_typing ? 'block' : 'none';
+                }
+            };
+        }
+
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function handleInput(event) {
+            updateSendButton();
+            
+            const recipient = document.getElementById('recipient').value.trim();
+            if (!recipient || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            if (typingTimeout) {
+                clearTimeout(typingTimeout);
+            }
+
+            if (!isTyping) {
+                isTyping = true;
+                sendTypingStatus(recipient, true);
+            }
+
+            typingTimeout = setTimeout(() => {
+                if (isTyping) {
+                    isTyping = false;
+                    sendTypingStatus(recipient, false);
+                }
+            }, TYPING_DURATION);
+        }
+
+        function sendTypingStatus(recipient, isTyping) {
+            fetch(`http://localhost:8081/api/v1/send-typing`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sector_id: parseInt(document.getElementById('sectorId').value),
+                    recipient: recipient,
+                    duration: isTyping ? 5 : 0
+                })
+            }).catch(error => {
+                console.error('Error sending typing status:', error);
+            });
+        }
+
+        function addMessageToChat(message, isOutgoing = true) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = `message-bubble ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showNotification('WebSocket não está conectado');
+                return;
+            }
+
+            const recipient = document.getElementById('recipient').value.trim();
+            if (!recipient) {
+                showNotification('Por favor, preencha o número do destinatário');
+                return;
+            }
+
+            if (currentMedia) {
+                await sendMediaMessage();
+                return;
+            }
+
+            const messageInput = document.getElementById('message');
+            const message = messageInput.value.trim();
+            if (!message) {
+                showNotification('Por favor, digite uma mensagem');
+                return;
+            }
+
+            if (isTyping) {
+                isTyping = false;
+                sendTypingStatus(recipient, false);
+                if (typingTimeout) {
+                    clearTimeout(typingTimeout);
+                }
+            }
+
+            try {
+                const response = await fetch(`http://localhost:8081/api/v1/send-message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sector_id: parseInt(document.getElementById('sectorId').value),
+                        recipient: recipient,
+                        message: message
+                    })
+                });
+
+                await handleApiResponse(response, 'Mensagem enviada com sucesso');
+                addMessageToChat(message, true);
+                messageInput.value = '';
+                updateSendButton();
+            } catch (error) {
+                showNotification(`Erro ao enviar mensagem: ${error.message}`);
+            }
+        }
+
+        async function sendMediaMessage() {
+            const recipient = document.getElementById('recipient').value.trim();
+            const caption = document.getElementById('mediaCaption').value.trim();
+            const sectorId = parseInt(document.getElementById('sectorId').value);
+
+            try {
+                const path = await uploadMedia();
+                if (!path) return;
+
+                let endpoint;
+                let body;
+
+                switch(currentMedia.type) {
+                    case 'image':
+                        endpoint = 'send-image';
+                        body = {
+                            sector_id: sectorId,
+                            recipient: recipient,
+                            image_path: path,
+                            caption: caption
+                        };
+                        break;
+                    case 'audio':
+                        endpoint = 'send-audio';
+                        body = {
+                            sector_id: sectorId,
+                            recipient: recipient,
+                            audio_path: path
+                        };
+                        break;
+                    case 'document':
+                        endpoint = 'send-document';
+                        body = {
+                            sector_id: sectorId,
+                            recipient: recipient,
+                            file_path: path
+                        };
+                        break;
+                    default:
+                        throw new Error('Tipo de mídia não suportado');
+                }
+
+                const response = await fetch(`http://localhost:8081/api/v1/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                await handleApiResponse(response, `${currentMedia.type} enviado com sucesso`);
+                addMessageToChat(`Enviado ${currentMedia.type}: ${currentMedia.file.name}`, true);
+                clearMediaPreview();
+            } catch (error) {
+                showNotification(`Erro ao enviar mídia: ${error.message}`);
+            }
+        }
+
+        async function uploadMedia() {
+            if (!currentMedia) return null;
+
+            const formData = new FormData();
+            formData.append('file', currentMedia.file);
+            
+            try {
+                const response = await fetch('http://localhost:8081/api/v1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await handleApiResponse(response, 'Arquivo enviado com sucesso');
+                return data.data.path;
+            } catch (error) {
+                showNotification(`Erro ao fazer upload: ${error.message}`);
+                return null;
+            }
+        }
+
+        // Inicialização
+        document.getElementById('message').addEventListener('input', updateSendButton);
+        document.getElementById('recipient').addEventListener('input', updateSendButton);
+        checkStatus();
+        updateSendButton();
+    </script>
+</body>
+</html> 
