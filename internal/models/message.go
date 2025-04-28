@@ -17,6 +17,8 @@ type Message struct {
 	WhatsAppMessageID string
 	IsOfficial        bool
 	CreatedAt         time.Time
+	UserID            *int
+	IsAnonymous       bool
 }
 
 type MessageRepository interface {

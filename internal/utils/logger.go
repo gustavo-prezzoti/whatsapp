@@ -1,10 +1,8 @@
 package utils
 
 import (
-	"fmt"
+	"io"
 	"log"
-	"os"
-	"runtime"
 	"time"
 
 	"go.mau.fi/whatsmeow/types"
@@ -18,38 +16,31 @@ var (
 )
 
 func init() {
-	InfoLogger = log.New(os.Stdout, "[INFO] ", log.Ldate|log.Ltime)
-	ErrorLogger = log.New(os.Stderr, "[ERROR] ", log.Ldate|log.Ltime)
-	DebugLogger = log.New(os.Stdout, "[DEBUG] ", log.Ldate|log.Ltime)
-	WarningLogger = log.New(os.Stdout, "[WARNING] ", log.Ldate|log.Ltime)
+	// Use discard writer to effectively disable logging
+	InfoLogger = log.New(io.Discard, "", 0)
+	ErrorLogger = log.New(io.Discard, "", 0)
+	DebugLogger = log.New(io.Discard, "", 0)
+	WarningLogger = log.New(io.Discard, "", 0)
 }
 
 func LogDebug(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	msg := fmt.Sprintf(format, v...)
-	DebugLogger.Printf("[%s:%d] %s", file, line, msg)
+	// No-op function
 }
 
 func LogInfo(format string, v ...interface{}) {
-	msg := fmt.Sprintf(format, v...)
-	InfoLogger.Printf("%s", msg)
+	// No-op function
 }
 
 func LogError(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	msg := fmt.Sprintf(format, v...)
-	ErrorLogger.Printf("[%s:%d] %s", file, line, msg)
+	// No-op function
 }
 
 func LogWarning(format string, v ...interface{}) {
-	_, file, line, _ := runtime.Caller(1)
-	msg := fmt.Sprintf(format, v...)
-	WarningLogger.Printf("[%s:%d] %s", file, line, msg)
+	// No-op function
 }
 
 func TimeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	LogDebug("%s levou %s", name, elapsed)
+	// No-op function
 }
 
 func GetCurrentTimestamp() int64 {

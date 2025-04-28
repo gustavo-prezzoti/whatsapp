@@ -7,6 +7,7 @@ import (
 	"time"
 	"whatsapp-bot/internal/models"
 	"whatsapp-bot/internal/utils"
+	"whatsapp-bot/internal/wsnotify"
 )
 
 type MySQLContactRepository struct {
@@ -420,7 +421,77 @@ func (r *MySQLContactRepository) SetViewedByID(sectorID int, contactID int) erro
 		return fmt.Errorf("contact not found")
 	}
 
+	// Buscar dados atualizados do contato para enviar via WebSocket
+	contact, err := r.getContactByID(sectorID, contactID)
+	if err == nil && contact != nil {
+		wsnotify.SendContactEvent(
+			contact.ID,
+			contact.SectorID,
+			contact.Name,
+			contact.Number,
+			contact.AvatarURL,
+			contact.IsViewed,
+			contact.ContactStatus,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+		)
+	}
+
 	return nil
+}
+
+// Função auxiliar para buscar contato por ID
+func (r *MySQLContactRepository) getContactByID(sectorID int, contactID int) (*models.Contact, error) {
+	query := `
+		SELECT 
+			id, name, number, avatar_url, sector_id, tag_id,
+			is_active, email, notes, ai_active, assigned_to,
+			priority, contact_status, created_at, updated_at, is_official, is_viewed
+		FROM contacts 
+		WHERE sector_id = ? AND id = ?`
+
+	contact := &models.Contact{}
+	var avatarURL, email, notes sql.NullString
+	var tagID, assignedTo sql.NullInt64
+
+	err := r.db.QueryRow(query, sectorID, contactID).Scan(
+		&contact.ID,
+		&contact.Name,
+		&contact.Number,
+		&avatarURL,
+		&contact.SectorID,
+		&tagID,
+		&contact.IsActive,
+		&email,
+		&notes,
+		&contact.AIActive,
+		&assignedTo,
+		&contact.Priority,
+		&contact.ContactStatus,
+		&contact.CreatedAt,
+		&contact.UpdatedAt,
+		&contact.IsOfficial,
+		&contact.IsViewed,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error getting contact: %v", err)
+	}
+
+	contact.AvatarURL = avatarURL.String
+	contact.Email = email.String
+	contact.Notes = notes.String
+	if tagID.Valid {
+		contact.TagID = int(tagID.Int64)
+	}
+	if assignedTo.Valid {
+		contact.AssignedTo = int(assignedTo.Int64)
+	}
+
+	return contact, nil
 }
 
 func (r *MySQLContactRepository) GetViewedStatus(sectorID int) (map[int]bool, error) {
@@ -491,6 +562,35 @@ func (r *MySQLContactRepository) SetUnviewed(sectorID int, number string) error 
 		return fmt.Errorf("contact not found")
 	}
 
+	// Buscar o contato atualizado para enviar via WebSocket
+	contact, err := r.GetByNumber(sectorID, normalizedNumber)
+	if err == nil && contact != nil {
+		wsnotify.SendContactEvent(
+			contact.ID,
+			contact.SectorID,
+			contact.Name,
+			contact.Number,
+			contact.AvatarURL,
+			contact.IsViewed,
+			contact.ContactStatus,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+		)
+	}
+
+	return nil
+}
+
+// SendUnreadStatusUpdate busca e envia o status de leitura dos contatos via WebSocket
+// sem modificar nenhum dado no banco. Use este método separadamente quando precisar
+// enviar atualizações de status sem risco de criar loops.
+func (r *MySQLContactRepository) SendUnreadStatusUpdate(sectorID int) error {
+	viewedStatus, err := r.GetViewedStatus(sectorID)
+	if err != nil {
+		return fmt.Errorf("erro ao obter status de leitura: %v", err)
+	}
+
+	wsnotify.SendUnreadStatusEvent(sectorID, viewedStatus)
 	return nil
 }
 

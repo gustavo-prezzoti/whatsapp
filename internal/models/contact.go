@@ -31,4 +31,5 @@ type ContactRepository interface {
 	SetViewed(sectorID int, number string) error
 	SetUnviewed(sectorID int, number string) error
 	GetViewedStatus(sectorID int) (map[int]bool, error)
+	SendUnreadStatusUpdate(sectorID int) error
 }

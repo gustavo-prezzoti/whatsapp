@@ -23,7 +23,7 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 			WhatsAppMessageId, is_official
 		) VALUES (?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(?, '+00:00', '-03:00'), ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(query,
+	result, err := r.db.Exec(query,
 		message.Conteudo,
 		message.Tipo,
 		utils.NullString(message.URL),
@@ -42,6 +42,12 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 		return fmt.Errorf("error saving message: %v", err)
 	}
 
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("error getting last insert id: %v", err)
+	}
+
+	message.ID = int(id)
 	return nil
 }
 

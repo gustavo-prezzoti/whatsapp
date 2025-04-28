@@ -454,6 +454,21 @@
                 if (data.type === 'typing_status') {
                     const typingIndicator = document.getElementById('typingIndicator');
                     typingIndicator.style.display = data.data.is_typing ? 'block' : 'none';
+                } else if (data.type === 'message') {
+                    // Adicionar mensagem ao chat
+                    const isOutgoing = data.payload.isSent;
+                    let messageContent = data.payload.content;
+                    
+                    // Se houver mídia, adicionar informação
+                    if (data.payload.mediaType && data.payload.mediaType !== 'text') {
+                        if (data.payload.mediaUrl) {
+                            messageContent += `\n[${data.payload.mediaType.toUpperCase()}]: ${data.payload.mediaUrl}`;
+                        } else {
+                            messageContent += `\n[${data.payload.mediaType.toUpperCase()}]`;
+                        }
+                    }
+                    
+                    addMessageToChat(messageContent, isOutgoing);
                 }
             };
         }
@@ -504,13 +519,13 @@
             });
         }
 
-        function addMessageToChat(message, isOutgoing = true) {
-            const messagesDiv = document.getElementById('messages');
-            const messageElement = document.createElement('div');
-            messageElement.className = `message-bubble ${isOutgoing ? 'message-outgoing' : 'message-incoming'}`;
-            messageElement.textContent = message;
-            messagesDiv.appendChild(messageElement);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        function addMessageToChat(message, isOutgoing) {
+            const chatMessages = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isOutgoing ? 'message outgoing' : 'message incoming';
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         async function sendMessage() {

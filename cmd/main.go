@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,13 +24,16 @@ import (
 // @host localhost:8081
 // @BasePath /api/v1
 func main() {
+	// Disable standard logging
+	log.SetOutput(io.Discard)
+
 	// Load config
 	cfg := config.NewConfig()
 
 	// Initialize database connection
 	db, err := config.ConnectDatabase()
 	if err != nil {
-		log.Fatalf("Error connecting to database: %v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -96,16 +99,12 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Println("Server is running on https://unofficial.ligchat.com")
-		fmt.Println("Swagger JSON available at: https://unofficial.ligchat.com/api/v1/swagger/swagger.json")
-		fmt.Println("Swagger UI available at: https://unofficial.ligchat.com/api/v1/swagger-ui/")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Error starting server: %v", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-stop
-	fmt.Println("\nShutting down gracefully...")
 
 	// Criar contexto com timeout para shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -113,13 +112,11 @@ func main() {
 
 	// Fechar servidor HTTP
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Error shutting down server: %v", err)
+		os.Exit(1)
 	}
 
 	// Fechar todas as conexões WhatsApp de forma segura
 	if err := connectionManager.CloseAllConnections(); err != nil {
-		log.Printf("Error closing WhatsApp connections: %v", err)
+		os.Exit(1)
 	}
-
-	fmt.Println("Server stopped successfully")
 }

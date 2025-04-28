@@ -107,7 +107,7 @@ func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.SendMessage(req.SectorID, req.Recipient, req.Message)
+	err = service.SendMessage(req.SectorID, req.Recipient, req.Message, req.UserID, req.IsAnonymous)
 	if err != nil {
 		utils.LogError("Erro ao enviar mensagem no /send-message: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar mensagem: "+err.Error()))
@@ -157,7 +157,7 @@ func (h *HTTPHandler) SendImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.SendImage(req.SectorID, req.Recipient, imageBytes, req.Caption)
+	err = service.SendImage(req.SectorID, req.Recipient, imageBytes, req.Caption, req.UserID, req.IsAnonymous)
 	if err != nil {
 		utils.LogError("Erro ao enviar imagem em /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar imagem: "+err.Error()))
@@ -208,7 +208,7 @@ func (h *HTTPHandler) SendAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.SendAudio(req.SectorID, req.Recipient, audioBytes)
+	err = service.SendAudio(req.SectorID, req.Recipient, audioBytes, req.UserID, req.IsAnonymous)
 	if err != nil {
 		utils.LogError("Erro ao enviar áudio em /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar áudio: "+err.Error()))
@@ -261,7 +261,7 @@ func (h *HTTPHandler) SendDocument(w http.ResponseWriter, r *http.Request) {
 
 	utils.LogInfo("Enviando documento: %s (%d bytes)", req.FileName, len(fileBytes))
 
-	err = service.SendDocument(req.SectorID, req.Recipient, fileBytes, req.FileName)
+	err = service.SendDocument(req.SectorID, req.Recipient, fileBytes, req.FileName, req.UserID, req.IsAnonymous)
 	if err != nil {
 		utils.LogError("Erro ao enviar documento em /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar documento: "+err.Error()))

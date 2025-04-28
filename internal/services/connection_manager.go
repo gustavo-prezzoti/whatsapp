@@ -292,7 +292,7 @@ func (cm *ConnectionManager) SendImage(sectorID int, recipient string, imagePath
 		return fmt.Errorf("erro ao ler arquivo de imagem: %v", err)
 	}
 
-	return service.SendImage(sectorID, recipient, imageBytes, caption)
+	return service.SendImage(sectorID, recipient, imageBytes, caption, nil, false)
 }
 
 func (cm *ConnectionManager) SendAudio(sectorID int, recipient string, audioPath string) error {
@@ -306,7 +306,7 @@ func (cm *ConnectionManager) SendAudio(sectorID int, recipient string, audioPath
 		return fmt.Errorf("erro ao ler arquivo de áudio: %v", err)
 	}
 
-	return service.SendAudio(sectorID, recipient, audioBytes)
+	return service.SendAudio(sectorID, recipient, audioBytes, nil, false)
 }
 
 func (cm *ConnectionManager) SendDocument(sectorID int, recipient string, filePath string) error {
@@ -321,7 +321,7 @@ func (cm *ConnectionManager) SendDocument(sectorID int, recipient string, filePa
 	}
 
 	fileName := filepath.Base(filePath)
-	return service.SendDocument(sectorID, recipient, fileBytes, fileName)
+	return service.SendDocument(sectorID, recipient, fileBytes, fileName, nil, false)
 }
 
 func (cm *ConnectionManager) SendTyping(sectorID int, recipient string, duration int) error {
