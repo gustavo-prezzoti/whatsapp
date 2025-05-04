@@ -281,6 +281,17 @@ func (s *WhatsAppService) SendMessage(sectorID int, recipient string, message st
 		return err
 	}
 
+	// Buscar ou criar o contato para atualizar sua ordem
+	contact, err := s.contactRepository.GetByNumber(sectorID, recipient)
+	if err != nil {
+		utils.LogError("Erro ao buscar contato: %v", err)
+	} else if contact == nil {
+		contact, err = s.contactRepository.CreateIfNotExists(sectorID, recipient)
+		if err != nil {
+			utils.LogError("Erro ao criar contato: %v", err)
+		}
+	}
+
 	utils.LogInfo("Tentando enviar mensagem para %s", recipient)
 
 	msg, err := conn.client.SendMessage(context.Background(), jid, &waProto.Message{
@@ -325,7 +336,100 @@ func (s *WhatsAppService) SendMessage(sectorID int, recipient string, message st
 		utils.LogError("Error saving message: %v", err)
 	}
 
+	// Quando enviamos uma resposta, marca todas as mensagens anteriores desse contato como lidas
+	// e envia uma atualização por WebSocket
+	go s.markPreviousMessagesAsRead(sectorID, recipient)
+
+	// Mover o contato para o topo da lista
+	if contact != nil {
+		go s.contactRepository.UpdateContactOrder(sectorID, contact.ID)
+	}
+
 	return nil
+}
+
+// Nova função para marcar mensagens anteriores como lidas
+func (s *WhatsAppService) markPreviousMessagesAsRead(sectorID int, contactJID string) {
+	// Buscar o contato
+	contact, err := s.contactRepository.GetByNumber(sectorID, contactJID)
+	if err != nil || contact == nil {
+		utils.LogError("Erro ao buscar contato para marcar mensagens como lidas: %v", err)
+		return
+	}
+
+	// Buscar mensagens recebidas deste contato (não enviadas pelo sistema)
+	// Aqui precisamos fazer uma consulta personalizada
+	query := `
+		SELECT id FROM messages 
+		WHERE id_setor = ? AND contato_id = ? AND enviado = 0
+		ORDER BY data_envio DESC 
+		LIMIT 20` // Limitar a 20 mensagens mais recentes
+
+	rows, err := s.connectionManager.db.Query(query, sectorID, contact.ID)
+	if err != nil {
+		utils.LogError("Erro ao buscar mensagens anteriores: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// Para cada mensagem, enviar uma atualização WebSocket
+	var messageIDs []int
+	for rows.Next() {
+		var messageID int
+		if err := rows.Scan(&messageID); err == nil {
+			messageIDs = append(messageIDs, messageID)
+
+			// Buscar detalhes da mensagem para enviar atualização
+			message, err := s.messageRepository.GetByID(messageID)
+			if err == nil && message != nil {
+				// Enviar recibo de leitura para o WhatsApp oficial
+				if s.client != nil && message.WhatsAppMessageID != "" {
+					jid := utils.JIDFromContatoID(message.ContatoID)
+					s.client.MarkRead(
+						[]types.MessageID{types.MessageID(message.WhatsAppMessageID)},
+						time.Now(),
+						jid,
+						jid,
+					)
+				}
+				// Enviar evento de atualização por WebSocket
+				var urlPtr, fileNamePtr, mimeTypePtr *string
+				if message.URL != "" {
+					urlPtr = &message.URL
+				}
+				if message.NomeArquivo != "" {
+					fileNamePtr = &message.NomeArquivo
+				}
+				if message.MimeType != "" {
+					mimeTypePtr = &message.MimeType
+				}
+
+				// Enviar WebSocket com status atualizado para "lido" (duas barras azuis)
+				wsnotify.SendMessageEvent(
+					message.ID,
+					int(message.ContatoID),
+					message.IDSetor,
+					message.Conteudo,
+					message.Tipo,
+					urlPtr,
+					fileNamePtr,
+					mimeTypePtr,
+					message.DataEnvio,
+					message.Enviado,
+					true,              // Marcar como lida
+					models.StatusRead, // Status com duas barras azuis
+				)
+			}
+		}
+	}
+
+	// Marcar no banco também como lidas
+	if len(messageIDs) > 0 {
+		utils.LogInfo("Marcando %d mensagens como lidas para o contato %s", len(messageIDs), contactJID)
+		if err := s.messageRepository.MarkMessagesAsRead(messageIDs); err != nil {
+			utils.LogError("Erro ao marcar mensagens como lidas no banco: %v", err)
+		}
+	}
 }
 
 func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes []byte, caption string, userID *int, isAnonymous bool) error {
@@ -337,6 +441,17 @@ func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes [
 	jid, err := utils.ParseJID(recipient)
 	if err != nil {
 		return err
+	}
+
+	// Buscar ou criar o contato para atualizar sua ordem
+	contact, err := s.contactRepository.GetByNumber(sectorID, recipient)
+	if err != nil {
+		utils.LogError("Erro ao buscar contato: %v", err)
+	} else if contact == nil {
+		contact, err = s.contactRepository.CreateIfNotExists(sectorID, recipient)
+		if err != nil {
+			utils.LogError("Erro ao criar contato: %v", err)
+		}
 	}
 
 	mimeType := http.DetectContentType(imageBytes)
@@ -399,6 +514,14 @@ func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes [
 	err = s.SaveMessage(sectorID, recipient, caption, "image", s3URL, fileName, mimeType, msg.ID, true, userID, isAnonymous)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
+	}
+
+	// Quando enviamos uma imagem, marcar mensagens anteriores como lidas
+	go s.markPreviousMessagesAsRead(sectorID, recipient)
+
+	// Mover o contato para o topo da lista
+	if contact != nil {
+		go s.contactRepository.UpdateContactOrder(sectorID, contact.ID)
 	}
 
 	return nil
@@ -585,6 +708,17 @@ func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes [
 		return err
 	}
 
+	// Buscar ou criar o contato para atualizar sua ordem
+	contact, err := s.contactRepository.GetByNumber(sectorID, recipient)
+	if err != nil {
+		utils.LogError("Erro ao buscar contato: %v", err)
+	} else if contact == nil {
+		contact, err = s.contactRepository.CreateIfNotExists(sectorID, recipient)
+		if err != nil {
+			utils.LogError("Erro ao criar contato: %v", err)
+		}
+	}
+
 	mimeType := http.DetectContentType(audioBytes)
 	utils.LogInfo("Tipo MIME original detectado: %s", mimeType)
 
@@ -662,6 +796,14 @@ func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes [
 		utils.LogError("Error saving message: %v", err)
 	}
 
+	// Quando enviamos um áudio, marcar mensagens anteriores como lidas
+	go s.markPreviousMessagesAsRead(sectorID, recipient)
+
+	// Mover o contato para o topo da lista
+	if contact != nil {
+		go s.contactRepository.UpdateContactOrder(sectorID, contact.ID)
+	}
+
 	return nil
 }
 
@@ -674,6 +816,17 @@ func (s *WhatsAppService) SendDocument(sectorID int, recipient string, fileBytes
 	jid, err := utils.ParseJID(recipient)
 	if err != nil {
 		return err
+	}
+
+	// Buscar ou criar o contato para atualizar sua ordem
+	contact, err := s.contactRepository.GetByNumber(sectorID, recipient)
+	if err != nil {
+		utils.LogError("Erro ao buscar contato: %v", err)
+	} else if contact == nil {
+		contact, err = s.contactRepository.CreateIfNotExists(sectorID, recipient)
+		if err != nil {
+			utils.LogError("Erro ao criar contato: %v", err)
+		}
 	}
 
 	mimeType := http.DetectContentType(fileBytes)
@@ -736,6 +889,14 @@ func (s *WhatsAppService) SendDocument(sectorID int, recipient string, fileBytes
 	err = s.SaveMessage(sectorID, recipient, filename, "document", s3URL, filename, mimeType, msg.ID, true, userID, isAnonymous)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
+	}
+
+	// Quando enviamos um documento, marcar mensagens anteriores como lidas
+	go s.markPreviousMessagesAsRead(sectorID, recipient)
+
+	// Mover o contato para o topo da lista
+	if contact != nil {
+		go s.contactRepository.UpdateContactOrder(sectorID, contact.ID)
 	}
 
 	return nil
@@ -974,9 +1135,17 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		if err != nil {
 			utils.LogError("Error sending unread status update: %v", err)
 		}
+
+		s.sendContactsList(sectorID)
 	}()
 
 	// Criar e salvar a mensagem
+	amazonasLoc, err := time.LoadLocation("America/Manaus")
+	if err != nil {
+		utils.LogError("Error loading Amazonas timezone: %v", err)
+		amazonasLoc = time.UTC
+	}
+
 	message := &models.Message{
 		Conteudo:          content,
 		Tipo:              messageType,
@@ -985,14 +1154,21 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		MimeType:          mimeType,
 		IDSetor:           sectorID,
 		ContatoID:         int64(contact.ID),
-		DataEnvio:         time.Now(),
+		DataEnvio:         time.Now().In(amazonasLoc),
 		Enviado:           isFromSystem,
 		Lido:              false,
 		WhatsAppMessageID: whatsappMessageID,
 		IsOfficial:        false,
-		CreatedAt:         time.Now(),
+		CreatedAt:         time.Now().In(amazonasLoc),
 		UserID:            userID,
 		IsAnonymous:       isAnonymous,
+	}
+
+	// Definindo o status da mensagem apenas para o WebSocket
+	messageStatus := models.StatusReceived
+	if isFromSystem {
+		// Mensagens enviadas pelo sistema mostram duas barras azuis (lidas)
+		messageStatus = models.StatusRead
 	}
 
 	err = s.messageRepository.Save(message)
@@ -1025,6 +1201,7 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		message.DataEnvio,
 		message.Enviado,
 		message.Lido,
+		messageStatus,
 	)
 
 	return nil
@@ -1046,8 +1223,8 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 
 		// Verificar se é um status pelo endereço do remetente
 		if normalizedJID == "status@broadcast" ||
-			strings.Contains(normalizedJID, "status") ||
-			strings.Contains(normalizedJID, "broadcast") {
+			strings.HasSuffix(normalizedJID, "@broadcast") ||
+			strings.Contains(normalizedJID, "status") {
 			return
 		}
 
@@ -1083,6 +1260,14 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 				return
 			}
 		}
+
+		// Atualizar foto do contato do WhatsApp se não houver avatar
+		if contact.AvatarURL == "" || contact.AvatarURL == "null" {
+			s.fetchContactInfo(sectorID, normalizedJID)
+		}
+
+		// Mover o contato para o topo da lista
+		go s.contactRepository.UpdateContactOrder(sectorID, contact.ID)
 
 		// Marcar como não visualizado ao receber mensagem
 		err = s.contactRepository.SetUnviewed(sectorID, normalizedJID)
@@ -1218,10 +1403,10 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			return
 		}
 
-		brasiliaLoc, err := time.LoadLocation("America/Sao_Paulo")
+		amazonasLoc, err := time.LoadLocation("America/Manaus")
 		if err != nil {
-			utils.LogError("Error loading Brasilia timezone: %v", err)
-			brasiliaLoc = time.UTC
+			utils.LogError("Error loading Amazonas timezone: %v", err)
+			amazonasLoc = time.UTC
 		}
 
 		message := &models.Message{
@@ -1232,11 +1417,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			MimeType:          mimeType,
 			IDSetor:           sectorID,
 			ContatoID:         int64(contact.ID),
-			DataEnvio:         time.Now().In(brasiliaLoc),
+			DataEnvio:         time.Now().In(amazonasLoc),
 			Enviado:           false,
 			Lido:              false,
 			WhatsAppMessageID: msg.Info.ID,
 			IsOfficial:        false,
+			CreatedAt:         time.Now().In(amazonasLoc),
 		}
 
 		err = s.messageRepository.Save(message)
@@ -1260,6 +1446,9 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		isSent := false
 		isRead := false
 
+		// Status da mensagem para o front
+		messageStatus := models.StatusReceived // Mensagens recebidas de clientes mostram duas barras
+
 		wsnotify.SendMessageEvent(
 			message.ID,
 			int(message.ContatoID),
@@ -1272,8 +1461,25 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			message.DataEnvio,
 			isSent,
 			isRead,
+			messageStatus,
 		)
+
+		// Enviar lista completa de contatos para atualizar a ordenação no frontend
+		go s.sendContactsList(sectorID)
 	}
+}
+
+// Novo método para enviar a lista completa de contatos via WebSocket
+func (s *WhatsAppService) sendContactsList(sectorID int) {
+	// Buscar todos os contatos do setor
+	contacts, err := s.contactRepository.GetBySector(sectorID)
+	if err != nil {
+		utils.LogError("Erro ao buscar lista de contatos para enviar via WebSocket: %v", err)
+		return
+	}
+
+	// Enviar evento com a lista completa de contatos
+	wsnotify.SendContactsList(sectorID, contacts)
 }
 
 // Função para buscar e atualizar informações de contato
@@ -1329,12 +1535,10 @@ func (s *WhatsAppService) fetchContactInfo(sectorID int, jid string) {
 	if contact.AvatarURL == "" {
 		profilePic, err := s.client.GetProfilePictureInfo(parsedJID, &whatsmeow.GetProfilePictureParams{})
 		if err == nil && profilePic != nil && profilePic.URL != "" {
-			// Download profile picture
 			resp, err := http.Get(profilePic.URL)
 			if err == nil {
 				defer resp.Body.Close()
 				if picData, err := io.ReadAll(resp.Body); err == nil {
-					// Upload to S3
 					s3FileName := fmt.Sprintf("sector_%d/avatars/%s.jpg", sectorID, phoneNumber)
 					if s3URL, err := s.s3Service.UploadBytes(picData, s3FileName, "image/jpeg"); err == nil {
 						contact.AvatarURL = s3URL
@@ -1377,6 +1581,7 @@ func (s *WhatsAppService) fetchContactInfo(sectorID int, jid string) {
 				contact.ContactStatus,
 				contact.CreatedAt,
 				contact.UpdatedAt,
+				contact.Order,
 			)
 		}
 	}

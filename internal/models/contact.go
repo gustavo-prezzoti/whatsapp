@@ -20,6 +20,7 @@ type Contact struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 	IsOfficial    bool      `json:"is_official"`
 	IsViewed      bool      `json:"is_viewed"`
+	Order         int       `json:"order"`
 }
 
 type ContactRepository interface {
@@ -32,4 +33,5 @@ type ContactRepository interface {
 	SetUnviewed(sectorID int, number string) error
 	GetViewedStatus(sectorID int) (map[int]bool, error)
 	SendUnreadStatusUpdate(sectorID int) error
+	UpdateContactOrder(sectorID int, contactID int) error
 }

@@ -120,11 +120,12 @@ func (r *MySQLContactRepository) GetByNumber(sectorID int, number string) (*mode
 func (r *MySQLContactRepository) GetBySector(sectorID int) ([]*models.Contact, error) {
 	query := `
 		SELECT 
-			id, name, number, avatar_url, sector_id, tag_id,
+			id, name, number, avatar_url, sector_id, tag_id, 
 			is_active, email, notes, ai_active, assigned_to,
-			priority, contact_status, created_at, updated_at, is_official
+			priority, contact_status, created_at, updated_at, is_official, is_viewed, COALESCE(` + "`order`" + `, id) AS contact_order
 		FROM contacts 
-		WHERE sector_id = ?`
+		WHERE sector_id = ? 
+		ORDER BY contact_order ASC`
 
 	rows, err := r.db.Query(query, sectorID)
 	if err != nil {
@@ -156,6 +157,8 @@ func (r *MySQLContactRepository) GetBySector(sectorID int) ([]*models.Contact, e
 			&contact.CreatedAt,
 			&contact.UpdatedAt,
 			&contact.IsOfficial,
+			&contact.IsViewed,
+			&contact.Order,
 		)
 
 		if err != nil {
@@ -165,9 +168,11 @@ func (r *MySQLContactRepository) GetBySector(sectorID int) ([]*models.Contact, e
 		contact.AvatarURL = avatarURL.String
 		contact.Email = email.String
 		contact.Notes = notes.String
+
 		if tagID.Valid {
 			contact.TagID = int(tagID.Int64)
 		}
+
 		if assignedTo.Valid {
 			contact.AssignedTo = int(assignedTo.Int64)
 		}
@@ -309,6 +314,12 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 		}
 	}
 
+	amazonasLoc, err := time.LoadLocation("America/Manaus")
+	if err != nil {
+		utils.LogWarning("Error loading Amazonas timezone: %v", err)
+		amazonasLoc = time.UTC
+	}
+
 	var contactID int64
 	if contact == nil {
 		newContact := &models.Contact{
@@ -318,8 +329,8 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 			IsActive:      true,
 			Priority:      "low",
 			ContactStatus: "Novo",
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+			CreatedAt:     time.Now().In(amazonasLoc),
+			UpdatedAt:     time.Now().In(amazonasLoc),
 			IsViewed:      false,
 		}
 
@@ -329,8 +340,8 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 			INSERT INTO contacts (
 				name, number, avatar_url, sector_id, tag_id,
 				is_active, email, notes, ai_active, assigned_to,
-				priority, contact_status, created_at, updated_at, is_official, is_viewed
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?)`,
+				priority, contact_status, created_at, updated_at, is_official, is_viewed, `+"`order`"+`
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, 1)`,
 			newContact.Name,
 			newContact.Number,
 			utils.NullString(newContact.AvatarURL),
@@ -369,6 +380,17 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 		return nil, fmt.Errorf("error creating card: %v", err)
 	}
 
+	// Incrementar a ordem de todos os outros contatos
+	_, err = tx.Exec(`
+		UPDATE contacts 
+		SET `+"`order`"+` = `+"`order`"+` + 1 
+		WHERE sector_id = ? AND id != LAST_INSERT_ID()`,
+		sectorID)
+
+	if err != nil {
+		return nil, fmt.Errorf("erro ao atualizar ordenação: %v", err)
+	}
+
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("error committing transaction: %v", err)
 	}
@@ -396,6 +418,9 @@ func (r *MySQLContactRepository) SetViewed(sectorID int, number string) error {
 	if rows == 0 {
 		return fmt.Errorf("contact not found")
 	}
+
+	// Enviar lista completa de contatos para atualizar a ordenação no frontend
+	go r.sendContactsList(sectorID)
 
 	return nil
 }
@@ -434,8 +459,12 @@ func (r *MySQLContactRepository) SetViewedByID(sectorID int, contactID int) erro
 			contact.ContactStatus,
 			contact.CreatedAt,
 			contact.UpdatedAt,
+			contact.Order,
 		)
 	}
+
+	// Enviar lista completa de contatos para atualizar a ordenação no frontend
+	go r.sendContactsList(sectorID)
 
 	return nil
 }
@@ -444,9 +473,9 @@ func (r *MySQLContactRepository) SetViewedByID(sectorID int, contactID int) erro
 func (r *MySQLContactRepository) getContactByID(sectorID int, contactID int) (*models.Contact, error) {
 	query := `
 		SELECT 
-			id, name, number, avatar_url, sector_id, tag_id,
+			id, name, number, avatar_url, sector_id, tag_id, 
 			is_active, email, notes, ai_active, assigned_to,
-			priority, contact_status, created_at, updated_at, is_official, is_viewed
+			priority, contact_status, created_at, updated_at, is_official, is_viewed, COALESCE(` + "`order`" + `, id) AS contact_order
 		FROM contacts 
 		WHERE sector_id = ? AND id = ?`
 
@@ -472,11 +501,13 @@ func (r *MySQLContactRepository) getContactByID(sectorID int, contactID int) (*m
 		&contact.UpdatedAt,
 		&contact.IsOfficial,
 		&contact.IsViewed,
+		&contact.Order,
 	)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("error getting contact: %v", err)
 	}
@@ -484,9 +515,11 @@ func (r *MySQLContactRepository) getContactByID(sectorID int, contactID int) (*m
 	contact.AvatarURL = avatarURL.String
 	contact.Email = email.String
 	contact.Notes = notes.String
+
 	if tagID.Valid {
 		contact.TagID = int(tagID.Int64)
 	}
+
 	if assignedTo.Valid {
 		contact.AssignedTo = int(assignedTo.Int64)
 	}
@@ -575,8 +608,12 @@ func (r *MySQLContactRepository) SetUnviewed(sectorID int, number string) error 
 			contact.ContactStatus,
 			contact.CreatedAt,
 			contact.UpdatedAt,
+			contact.Order,
 		)
 	}
+
+	// Enviar lista completa de contatos para atualizar a ordenação no frontend
+	go r.sendContactsList(sectorID)
 
 	return nil
 }
@@ -592,6 +629,109 @@ func (r *MySQLContactRepository) SendUnreadStatusUpdate(sectorID int) error {
 
 	wsnotify.SendUnreadStatusEvent(sectorID, viewedStatus)
 	return nil
+}
+
+// UpdateContactOrder move um contato para o topo da lista (ordem 1) e incrementa a ordem dos outros contatos
+func (r *MySQLContactRepository) UpdateContactOrder(sectorID int, contactID int) error {
+	// Iniciar uma transação para garantir consistência
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("erro ao iniciar transação: %v", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Verificar se já existe ordenação, se não, inicializar todos com ordem = ID
+	var count int
+	err = tx.QueryRow("SELECT COUNT(*) FROM contacts WHERE sector_id = ? AND `order` > 0", sectorID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("erro ao verificar contatos: %v", err)
+	}
+
+	// Se não existirem contatos com ordenação, inicializar todos
+	if count == 0 {
+		_, err = tx.Exec(`
+			UPDATE contacts 
+			SET `+"`order`"+` = id 
+			WHERE sector_id = ?`,
+			sectorID)
+
+		if err != nil {
+			return fmt.Errorf("erro ao inicializar ordenação: %v", err)
+		}
+	}
+
+	// 2. Incrementar a ordem de todos os contatos que estão acima do alvo
+	_, err = tx.Exec(`
+		UPDATE contacts 
+		SET `+"`order`"+` = `+"`order`"+` + 1 
+		WHERE sector_id = ? AND `+"`order`"+` < (
+			SELECT `+"`order`"+` FROM (
+				SELECT `+"`order`"+` FROM contacts WHERE id = ? AND sector_id = ?
+			) AS temp
+		)`,
+		sectorID, contactID, sectorID)
+
+	if err != nil {
+		return fmt.Errorf("erro ao incrementar ordenação: %v", err)
+	}
+
+	// 3. Mover o contato alvo para o topo (ordem = 1)
+	_, err = tx.Exec(`
+		UPDATE contacts 
+		SET `+"`order`"+` = 1, updated_at = NOW()
+		WHERE id = ? AND sector_id = ?`,
+		contactID, sectorID)
+
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar ordem do contato: %v", err)
+	}
+
+	// Commit da transação
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("erro ao finalizar transação: %v", err)
+	}
+
+	// Buscar contato atualizado para enviar via WebSocket
+	contact, err := r.getContactByID(sectorID, contactID)
+	if err == nil && contact != nil {
+		wsnotify.SendContactEvent(
+			contact.ID,
+			contact.SectorID,
+			contact.Name,
+			contact.Number,
+			contact.AvatarURL,
+			contact.IsViewed,
+			contact.ContactStatus,
+			contact.CreatedAt,
+			contact.UpdatedAt,
+			contact.Order,
+		)
+	}
+
+	// Enviar uma única atualização de status de não lidos após a atualização
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		err := r.SendUnreadStatusUpdate(sectorID)
+		if err != nil {
+			utils.LogError("Erro ao enviar atualização de status após UpdateContactOrder: %v", err)
+		}
+
+		// Buscar e enviar lista completa de contatos
+		r.sendContactsList(sectorID)
+	}()
+
+	return nil
+}
+
+// Novo método para enviar a lista completa de contatos via WebSocket
+func (r *MySQLContactRepository) sendContactsList(sectorID int) {
+	contacts, err := r.GetBySector(sectorID)
+	if err != nil {
+		utils.LogError("Erro ao buscar lista de contatos para enviar via WebSocket: %v", err)
+		return
+	}
+
+	wsnotify.SendContactsList(sectorID, contacts)
 }
 
 func nullInt(i int) sql.NullInt64 {

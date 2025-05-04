@@ -24,7 +24,7 @@ func NewDatabaseConfig() *DatabaseConfig {
 }
 
 func (c *DatabaseConfig) GetDSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true",
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true&loc=America%%2FManaus&time_zone='-04:00'",
 		c.User, c.Password, c.Server, c.Database)
 }
 
@@ -43,6 +43,12 @@ func ConnectDatabase() (*sql.DB, error) {
 	err = db.Ping()
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to the database: %v", err)
+	}
+
+	// Configurar fuso horário explicitamente para todas as conexões
+	_, err = db.Exec("SET time_zone = 'America/Manaus'")
+	if err != nil {
+		return nil, fmt.Errorf("error setting timezone: %v", err)
 	}
 
 	return db, nil

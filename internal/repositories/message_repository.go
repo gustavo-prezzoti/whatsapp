@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"whatsapp-bot/internal/models"
 	"whatsapp-bot/internal/utils"
 )
@@ -170,4 +171,21 @@ func (r *MySQLMessageRepository) fetchMessages(query string, args ...interface{}
 	}
 
 	return messages, nil
+}
+
+func (r *MySQLMessageRepository) UpdateMessageStatus(messageID int, status string) error {
+	return nil
+}
+
+func (r *MySQLMessageRepository) MarkMessagesAsRead(messageIDs []int) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	query := "UPDATE messages SET lido = 1 WHERE id IN (?" + strings.Repeat(",?", len(messageIDs)-1) + ")"
+	args := make([]interface{}, len(messageIDs))
+	for i, id := range messageIDs {
+		args[i] = id
+	}
+	_, err := r.db.Exec(query, args...)
+	return err
 }

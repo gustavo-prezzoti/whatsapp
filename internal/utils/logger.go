@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"time"
@@ -52,4 +53,11 @@ func ParseJID(recipient string) (types.JID, error) {
 		recipient = "55" + recipient
 	}
 	return types.ParseJID(recipient + "@s.whatsapp.net")
+}
+
+func JIDFromContatoID(contatoID int64) types.JID {
+	return types.JID{
+		User:   fmt.Sprintf("%d", contatoID),
+		Server: "s.whatsapp.net",
+	}
 }

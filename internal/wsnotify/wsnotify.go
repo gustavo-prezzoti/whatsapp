@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"whatsapp-bot/internal/models"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -83,17 +85,18 @@ func (m *WebSocketManager) BroadcastToSector(event interface{}, sectorID int) {
 }
 
 type MessagePayload struct {
-	ID        int     `json:"id"`
-	ContactID int     `json:"contactID"`
-	SectorID  int     `json:"sectorId"`
-	Content   string  `json:"content"`
-	MediaType string  `json:"mediaType"`
-	MediaUrl  *string `json:"mediaUrl"`
-	FileName  *string `json:"fileName"`
-	MimeType  *string `json:"mimeType"`
-	SentAt    string  `json:"sentAt"`
-	IsSent    bool    `json:"isSent"`
-	IsRead    bool    `json:"isRead"`
+	ID            int     `json:"id"`
+	ContactID     int     `json:"contactID"`
+	SectorID      int     `json:"sectorId"`
+	Content       string  `json:"content"`
+	MediaType     string  `json:"mediaType"`
+	MediaUrl      *string `json:"mediaUrl"`
+	FileName      *string `json:"fileName"`
+	MimeType      *string `json:"mimeType"`
+	SentAt        string  `json:"sentAt"`
+	IsSent        bool    `json:"isSent"`
+	IsRead        bool    `json:"isRead"`
+	MessageStatus string  `json:"messageStatus"`
 }
 
 type MessageEvent struct {
@@ -113,19 +116,21 @@ func SendMessageEvent(
 	sentAt time.Time,
 	isSent bool,
 	isRead bool,
+	messageStatus string,
 ) {
 	payload := MessagePayload{
-		ID:        id,
-		ContactID: contactID,
-		SectorID:  sectorID,
-		Content:   content,
-		MediaType: mediaType,
-		MediaUrl:  mediaUrl,
-		FileName:  fileName,
-		MimeType:  mimeType,
-		SentAt:    sentAt.UTC().Format(time.RFC3339Nano),
-		IsSent:    isSent,
-		IsRead:    isRead,
+		ID:            id,
+		ContactID:     contactID,
+		SectorID:      sectorID,
+		Content:       content,
+		MediaType:     mediaType,
+		MediaUrl:      mediaUrl,
+		FileName:      fileName,
+		MimeType:      mimeType,
+		SentAt:        sentAt.UTC().Format(time.RFC3339Nano),
+		IsSent:        isSent,
+		IsRead:        isRead,
+		MessageStatus: messageStatus,
 	}
 	event := MessageEvent{
 		Type:    "message",
@@ -140,11 +145,12 @@ type ContactPayload struct {
 	SectorID      int       `json:"sectorId"`
 	Name          string    `json:"name"`
 	Number        string    `json:"number"`
-	Avatar        string    `json:"avatarUrl"`
+	AvatarUrl     string    `json:"avatarUrl"`
 	IsViewed      bool      `json:"isViewed"`
 	ContactStatus string    `json:"contactStatus"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
+	Order         int       `json:"order"`
 }
 
 type ContactEvent struct {
@@ -158,27 +164,31 @@ func SendContactEvent(
 	sectorID int,
 	name string,
 	number string,
-	avatar string,
+	avatarUrl string,
 	isViewed bool,
 	contactStatus string,
 	createdAt time.Time,
 	updatedAt time.Time,
+	order int,
 ) {
 	payload := ContactPayload{
 		ID:            id,
 		SectorID:      sectorID,
 		Name:          name,
 		Number:        number,
-		Avatar:        avatar,
+		AvatarUrl:     avatarUrl,
 		IsViewed:      isViewed,
 		ContactStatus: contactStatus,
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
+		Order:         order,
 	}
+
 	event := ContactEvent{
 		Type:    "contact",
 		Payload: payload,
 	}
+
 	Manager.BroadcastToSector(event, sectorID)
 }
 
@@ -206,5 +216,49 @@ func SendUnreadStatusEvent(
 		Type:    "unread_status",
 		Payload: payload,
 	}
+	Manager.BroadcastToSector(event, sectorID)
+}
+
+// ContactsListPayload define a estrutura da lista completa de contatos
+type ContactsListPayload struct {
+	SectorID int              `json:"sectorId"`
+	Contacts []ContactPayload `json:"contacts"`
+}
+
+type ContactsListEvent struct {
+	Type    string              `json:"type"`
+	Payload ContactsListPayload `json:"payload"`
+}
+
+// SendContactsList envia a lista completa de contatos pelo WebSocket
+func SendContactsList(sectorID int, contacts []*models.Contact) {
+	// Converter a lista de contatos para o formato do payload
+	contactsPayload := make([]ContactPayload, 0, len(contacts))
+
+	for _, contact := range contacts {
+		contactsPayload = append(contactsPayload, ContactPayload{
+			ID:            contact.ID,
+			SectorID:      contact.SectorID,
+			Name:          contact.Name,
+			Number:        contact.Number,
+			AvatarUrl:     contact.AvatarURL,
+			IsViewed:      contact.IsViewed,
+			ContactStatus: contact.ContactStatus,
+			CreatedAt:     contact.CreatedAt,
+			UpdatedAt:     contact.UpdatedAt,
+			Order:         contact.Order,
+		})
+	}
+
+	payload := ContactsListPayload{
+		SectorID: sectorID,
+		Contacts: contactsPayload,
+	}
+
+	event := ContactsListEvent{
+		Type:    "contacts_list",
+		Payload: payload,
+	}
+
 	Manager.BroadcastToSector(event, sectorID)
 }
