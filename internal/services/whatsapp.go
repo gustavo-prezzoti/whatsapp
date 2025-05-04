@@ -23,6 +23,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/store"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -78,6 +79,10 @@ func (s *WhatsAppService) getDBPath() string {
 }
 
 func (s *WhatsAppService) Connect() error {
+	// Definir nome e tipo de plataforma para aparecer como navegador
+	store.DeviceProps.Os = proto.String("LigChat")
+	store.DeviceProps.PlatformType = waProto.DeviceProps_DESKTOP.Enum()
+
 	utils.LogInfo("Conectando ao WhatsApp para setor %d", s.sectorID)
 
 	if s.client != nil {
@@ -113,6 +118,9 @@ func (s *WhatsAppService) Connect() error {
 	s.client = client
 
 	s.client.AddEventHandler(s.eventHandler)
+
+	// Definir nome do dispositivo (aparece em Aparelhos Conectados)
+	client.Store.Platform = "LigChat"
 
 	utils.LogInfo("Gerando QR code para setor %d", s.sectorID)
 	qrChan, _ := s.client.GetQRChannel(context.Background())
