@@ -1148,6 +1148,9 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 	}()
 
 	// Criar e salvar a mensagem
+	// Adicionar 1 hora ao timestamp atual
+	now := time.Now().Add(time.Hour)
+
 	message := &models.Message{
 		Conteudo:          content,
 		Tipo:              messageType,
@@ -1156,12 +1159,12 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		MimeType:          mimeType,
 		IDSetor:           sectorID,
 		ContatoID:         int64(contact.ID),
-		DataEnvio:         time.Now(),
+		DataEnvio:         now,
 		Enviado:           isFromSystem,
 		Lido:              false,
 		WhatsAppMessageID: whatsappMessageID,
 		IsOfficial:        false,
-		CreatedAt:         time.Now(),
+		CreatedAt:         now,
 		UserID:            userID,
 		IsAnonymous:       isAnonymous,
 	}
@@ -1406,6 +1409,9 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		}
 
 		// Criar e salvar a mensagem
+		// Adicionar 1 hora ao timestamp atual
+		now := time.Now().Add(time.Hour)
+
 		message := &models.Message{
 			Conteudo:          content,
 			Tipo:              messageType,
@@ -1414,12 +1420,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			MimeType:          mimeType,
 			IDSetor:           sectorID,
 			ContatoID:         int64(contact.ID),
-			DataEnvio:         time.Now(),
+			DataEnvio:         now,
 			Enviado:           false,
 			Lido:              false,
 			WhatsAppMessageID: msg.Info.ID,
 			IsOfficial:        false,
-			CreatedAt:         time.Now(),
+			CreatedAt:         now,
 		}
 
 		err = s.messageRepository.Save(message)
