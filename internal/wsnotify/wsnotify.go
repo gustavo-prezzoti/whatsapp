@@ -118,8 +118,8 @@ func SendMessageEvent(
 	isRead bool,
 	messageStatus string,
 ) {
-	// Adicionar 1 hora ao timestamp para exibição correta no front-end
-	adjustedTime := sentAt.Add(time.Hour)
+	// Remover 1 hora do timestamp para exibição correta no front-end
+	adjustedTime := sentAt.Add(-time.Hour)
 
 	payload := MessagePayload{
 		ID:            id,
