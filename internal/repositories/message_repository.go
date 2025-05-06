@@ -22,7 +22,7 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 			conteudo, tipo, url, nome_arquivo, mime_type, 
 			id_setor, contato_id, data_envio, enviado, lido, 
 			WhatsAppMessageId, is_official
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(?, 'SYSTEM', 'America/Sao_Paulo'), ?, ?, ?, ?)`
 
 	result, err := r.db.Exec(query,
 		message.Conteudo,
@@ -56,8 +56,9 @@ func (r *MySQLMessageRepository) GetByID(id int) (*models.Message, error) {
 	query := `
 		SELECT 
 			id, conteudo, tipo, url, nome_arquivo, mime_type,
-			id_setor, contato_id, data_envio, enviado, lido,
-			WhatsAppMessageId, is_official, created_at
+			id_setor, contato_id, CONVERT_TZ(data_envio, 'SYSTEM', 'America/Sao_Paulo') as data_envio, 
+			enviado, lido, WhatsAppMessageId, is_official, 
+			CONVERT_TZ(created_at, 'SYSTEM', 'America/Sao_Paulo') as created_at
 		FROM messages 
 		WHERE id = ?`
 
@@ -100,8 +101,9 @@ func (r *MySQLMessageRepository) GetBySector(sectorID int, limit int) ([]*models
 	query := `
 		SELECT 
 			id, conteudo, tipo, url, nome_arquivo, mime_type,
-			id_setor, contato_id, data_envio, enviado, lido,
-			WhatsAppMessageId, is_official, created_at
+			id_setor, contato_id, CONVERT_TZ(data_envio, 'SYSTEM', 'America/Sao_Paulo') as data_envio, 
+			enviado, lido, WhatsAppMessageId, is_official, 
+			CONVERT_TZ(created_at, 'SYSTEM', 'America/Sao_Paulo') as created_at
 		FROM messages 
 		WHERE id_setor = ?
 		ORDER BY data_envio DESC
@@ -114,8 +116,9 @@ func (r *MySQLMessageRepository) GetByContact(sectorID int, contactID string, li
 	query := `
 		SELECT 
 			id, conteudo, tipo, url, nome_arquivo, mime_type,
-			id_setor, contato_id, data_envio, enviado, lido,
-			WhatsAppMessageId, is_official, created_at
+			id_setor, contato_id, CONVERT_TZ(data_envio, 'SYSTEM', 'America/Sao_Paulo') as data_envio, 
+			enviado, lido, WhatsAppMessageId, is_official, 
+			CONVERT_TZ(created_at, 'SYSTEM', 'America/Sao_Paulo') as created_at
 		FROM messages 
 		WHERE id_setor = ? AND contato_id = ?
 		ORDER BY data_envio DESC
