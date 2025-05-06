@@ -22,7 +22,7 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 			conteudo, tipo, url, nome_arquivo, mime_type, 
 			id_setor, contato_id, data_envio, enviado, lido, 
 			WhatsAppMessageId, is_official
-		) VALUES (?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(?, '+00:00', '-03:00'), ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := r.db.Exec(query,
 		message.Conteudo,
@@ -32,7 +32,7 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 		utils.NullString(message.MimeType),
 		message.IDSetor,
 		message.ContatoID,
-		message.DataEnvio.UTC(),
+		message.DataEnvio,
 		utils.BoolToInt(message.Enviado),
 		utils.BoolToInt(message.Lido),
 		utils.NullString(message.WhatsAppMessageID),

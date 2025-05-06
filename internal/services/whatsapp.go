@@ -1148,10 +1148,10 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 	}()
 
 	// Criar e salvar a mensagem
-	amazonasLoc, err := time.LoadLocation("America/Manaus")
+	brasiliaLoc, err := time.LoadLocation("America/Sao_Paulo")
 	if err != nil {
-		utils.LogError("Error loading Amazonas timezone: %v", err)
-		amazonasLoc = time.UTC
+		utils.LogError("Error loading Brasilia timezone: %v", err)
+		brasiliaLoc = time.UTC
 	}
 
 	message := &models.Message{
@@ -1162,12 +1162,12 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		MimeType:          mimeType,
 		IDSetor:           sectorID,
 		ContatoID:         int64(contact.ID),
-		DataEnvio:         time.Now().In(amazonasLoc),
+		DataEnvio:         time.Now().In(brasiliaLoc),
 		Enviado:           isFromSystem,
 		Lido:              false,
 		WhatsAppMessageID: whatsappMessageID,
 		IsOfficial:        false,
-		CreatedAt:         time.Now().In(amazonasLoc),
+		CreatedAt:         time.Now().In(brasiliaLoc),
 		UserID:            userID,
 		IsAnonymous:       isAnonymous,
 	}
@@ -1411,10 +1411,10 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			return
 		}
 
-		amazonasLoc, err := time.LoadLocation("America/Manaus")
+		brasiliaLoc, err := time.LoadLocation("America/Sao_Paulo")
 		if err != nil {
-			utils.LogError("Error loading Amazonas timezone: %v", err)
-			amazonasLoc = time.UTC
+			utils.LogError("Error loading Brasilia timezone: %v", err)
+			brasiliaLoc = time.UTC
 		}
 
 		message := &models.Message{
@@ -1425,12 +1425,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			MimeType:          mimeType,
 			IDSetor:           sectorID,
 			ContatoID:         int64(contact.ID),
-			DataEnvio:         time.Now().In(amazonasLoc),
+			DataEnvio:         time.Now().In(brasiliaLoc),
 			Enviado:           false,
 			Lido:              false,
 			WhatsAppMessageID: msg.Info.ID,
 			IsOfficial:        false,
-			CreatedAt:         time.Now().In(amazonasLoc),
+			CreatedAt:         time.Now().In(brasiliaLoc),
 		}
 
 		err = s.messageRepository.Save(message)
