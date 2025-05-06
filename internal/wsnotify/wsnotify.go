@@ -127,7 +127,7 @@ func SendMessageEvent(
 		MediaUrl:      mediaUrl,
 		FileName:      fileName,
 		MimeType:      mimeType,
-		SentAt:        sentAt.UTC().Format(time.RFC3339Nano),
+		SentAt:        sentAt.Format(time.RFC3339Nano),
 		IsSent:        isSent,
 		IsRead:        isRead,
 		MessageStatus: messageStatus,

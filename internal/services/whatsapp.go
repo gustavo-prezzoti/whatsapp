@@ -1148,12 +1148,6 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 	}()
 
 	// Criar e salvar a mensagem
-	brasiliaLoc, err := time.LoadLocation("America/Sao_Paulo")
-	if err != nil {
-		utils.LogError("Error loading Brasilia timezone: %v", err)
-		brasiliaLoc = time.UTC
-	}
-
 	message := &models.Message{
 		Conteudo:          content,
 		Tipo:              messageType,
@@ -1162,12 +1156,12 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		MimeType:          mimeType,
 		IDSetor:           sectorID,
 		ContatoID:         int64(contact.ID),
-		DataEnvio:         time.Now().In(brasiliaLoc),
+		DataEnvio:         time.Now(),
 		Enviado:           isFromSystem,
 		Lido:              false,
 		WhatsAppMessageID: whatsappMessageID,
 		IsOfficial:        false,
-		CreatedAt:         time.Now().In(brasiliaLoc),
+		CreatedAt:         time.Now(),
 		UserID:            userID,
 		IsAnonymous:       isAnonymous,
 	}
@@ -1411,12 +1405,7 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			return
 		}
 
-		brasiliaLoc, err := time.LoadLocation("America/Sao_Paulo")
-		if err != nil {
-			utils.LogError("Error loading Brasilia timezone: %v", err)
-			brasiliaLoc = time.UTC
-		}
-
+		// Criar e salvar a mensagem
 		message := &models.Message{
 			Conteudo:          content,
 			Tipo:              messageType,
@@ -1425,12 +1414,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			MimeType:          mimeType,
 			IDSetor:           sectorID,
 			ContatoID:         int64(contact.ID),
-			DataEnvio:         time.Now().In(brasiliaLoc),
+			DataEnvio:         time.Now(),
 			Enviado:           false,
 			Lido:              false,
 			WhatsAppMessageID: msg.Info.ID,
 			IsOfficial:        false,
-			CreatedAt:         time.Now().In(brasiliaLoc),
+			CreatedAt:         time.Now(),
 		}
 
 		err = s.messageRepository.Save(message)
