@@ -118,6 +118,9 @@ func SendMessageEvent(
 	isRead bool,
 	messageStatus string,
 ) {
+	// Adicionar 1 hora ao timestamp para exibição correta no front-end
+	adjustedTime := sentAt.Add(time.Hour)
+
 	payload := MessagePayload{
 		ID:            id,
 		ContactID:     contactID,
@@ -127,7 +130,7 @@ func SendMessageEvent(
 		MediaUrl:      mediaUrl,
 		FileName:      fileName,
 		MimeType:      mimeType,
-		SentAt:        sentAt.Format(time.RFC3339Nano),
+		SentAt:        adjustedTime.Format(time.RFC3339Nano),
 		IsSent:        isSent,
 		IsRead:        isRead,
 		MessageStatus: messageStatus,
