@@ -1134,8 +1134,8 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		}
 	}
 
-	// Converter a data para string no formato brasileiro
-	dataEnvioStr := sentAt.Format("02/01/2006 15:04:05")
+	// Usar o timestamp atual em UTC para DataEnvio
+	dataEnvioStr := time.Now().UTC().Format("02/01/2006 15:04:05")
 
 	message := &models.Message{
 		Conteudo:          content,
@@ -1417,8 +1417,8 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		}
 
 		// Criar e salvar a mensagem
-		// Converter o timestamp para string no formato brasileiro
-		dataEnvioStr := msg.Info.Timestamp.Format("02/01/2006 15:04:05")
+		// Usar o timestamp atual em UTC para DataEnvio
+		dataEnvioStr := time.Now().UTC().Format("02/01/2006 15:04:05")
 
 		message := &models.Message{
 			Conteudo:          content,
@@ -1461,10 +1461,9 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		if mimeType != "" {
 			mimeTypePtr = &mimeType
 		}
-		isSent := false
+		isSent := msg.Info.IsFromMe
 		isRead := false
 
-		// Para o WebSocket, usar o timestamp original
 		wsnotify.SendMessageEvent(
 			message.ID,
 			int(message.ContatoID),
@@ -1474,7 +1473,7 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			mediaUrlPtr,
 			fileNamePtr,
 			mimeTypePtr,
-			msg.Info.Timestamp, // Usar timestamp original do WhatsApp
+			msg.Info.Timestamp,
 			isSent,
 			isRead,
 			messageStatus,

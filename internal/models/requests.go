@@ -11,6 +11,7 @@ type MessageRequest struct {
 	UserID      *int      `json:"userId"`
 	IsAnonymous bool      `json:"isAnonymous"`
 	SentAt      time.Time `json:"sentAt" swagger:"required" description:"Timestamp do momento do envio da mensagem"`
+	Timezone    string    `json:"timezone" swagger:"required" description:"Timezone do frontend, ex: America/Sao_Paulo"`
 }
 
 type MediaMessageRequest struct {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"whatsapp-bot/config"
 	"whatsapp-bot/internal/models"
 	"whatsapp-bot/internal/repositories"
@@ -105,6 +106,21 @@ func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Timezone == "" {
+		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Missing timezone field"))
+		return
+	}
+
+	loc, err := time.LoadLocation(req.Timezone)
+	if err != nil {
+		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Invalid timezone"))
+		return
+	}
+
+	// sentAt está no timezone informado, converte para UTC
+	sentAtInLoc := req.SentAt.In(loc)
+	sentAtUTC := sentAtInLoc.UTC()
+
 	// Obter conexão do setor
 	connection, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
@@ -113,15 +129,16 @@ func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enviar mensagem
-	err = connection.SendMessage(req.SectorID, req.Recipient, req.Message, req.UserID, req.IsAnonymous, req.SentAt)
+	err = connection.SendMessage(req.SectorID, req.Recipient, req.Message, req.UserID, req.IsAnonymous, sentAtUTC)
 	if err != nil {
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse(err.Error()))
 		return
 	}
 
-	// Retornar o sentAt enviado pelo frontend na resposta
+	// Retornar o sentAt convertido para UTC, em formato ISO UTC (RFC3339Nano)
+	sentAtStr := sentAtUTC.Format(time.RFC3339Nano)
 	models.RespondWithJSON(w, http.StatusOK, models.NewSuccessResponse("Message sent successfully", map[string]interface{}{
-		"sentAt": req.SentAt,
+		"sentAt": sentAtStr,
 	}))
 }
 
