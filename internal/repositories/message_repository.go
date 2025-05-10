@@ -17,6 +17,8 @@ func NewMySQLMessageRepository(db *sql.DB) *MySQLMessageRepository {
 }
 
 func (r *MySQLMessageRepository) Save(message *models.Message) error {
+	// DataEnvio já deve vir como string do formato correto
+
 	query := `
 		INSERT INTO messages (
 			conteudo, tipo, url, nome_arquivo, mime_type, 
@@ -32,7 +34,7 @@ func (r *MySQLMessageRepository) Save(message *models.Message) error {
 		utils.NullString(message.MimeType),
 		message.IDSetor,
 		message.ContatoID,
-		message.DataEnvio,
+		message.DataEnvio, // DataEnvio já é string
 		utils.BoolToInt(message.Enviado),
 		utils.BoolToInt(message.Lido),
 		utils.NullString(message.WhatsAppMessageID),
@@ -62,7 +64,8 @@ func (r *MySQLMessageRepository) GetByID(id int) (*models.Message, error) {
 		WHERE id = ?`
 
 	message := &models.Message{}
-	var url, nomeArquivo, mimeType, whatsappMessageID sql.NullString
+	var url, nomeArquivo, mimeType, whatsappMessageID, dataEnvio sql.NullString
+	var createdAt sql.NullTime
 
 	err := r.db.QueryRow(query, id).Scan(
 		&message.ID,
@@ -73,12 +76,12 @@ func (r *MySQLMessageRepository) GetByID(id int) (*models.Message, error) {
 		&mimeType,
 		&message.IDSetor,
 		&message.ContatoID,
-		&message.DataEnvio,
+		&dataEnvio,
 		&message.Enviado,
 		&message.Lido,
 		&whatsappMessageID,
 		&message.IsOfficial,
-		&message.CreatedAt,
+		&createdAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -92,6 +95,7 @@ func (r *MySQLMessageRepository) GetByID(id int) (*models.Message, error) {
 	message.NomeArquivo = nomeArquivo.String
 	message.MimeType = mimeType.String
 	message.WhatsAppMessageID = whatsappMessageID.String
+	message.DataEnvio = dataEnvio.String
 
 	return message, nil
 }
@@ -135,7 +139,8 @@ func (r *MySQLMessageRepository) fetchMessages(query string, args ...interface{}
 
 	for rows.Next() {
 		message := &models.Message{}
-		var url, nomeArquivo, mimeType, whatsappMessageID sql.NullString
+		var url, nomeArquivo, mimeType, whatsappMessageID, dataEnvio sql.NullString
+		var createdAt sql.NullTime
 
 		err := rows.Scan(
 			&message.ID,
@@ -146,12 +151,12 @@ func (r *MySQLMessageRepository) fetchMessages(query string, args ...interface{}
 			&mimeType,
 			&message.IDSetor,
 			&message.ContatoID,
-			&message.DataEnvio,
+			&dataEnvio,
 			&message.Enviado,
 			&message.Lido,
 			&whatsappMessageID,
 			&message.IsOfficial,
-			&message.CreatedAt,
+			&createdAt,
 		)
 
 		if err != nil {
@@ -162,6 +167,7 @@ func (r *MySQLMessageRepository) fetchMessages(query string, args ...interface{}
 		message.NomeArquivo = nomeArquivo.String
 		message.MimeType = mimeType.String
 		message.WhatsAppMessageID = whatsappMessageID.String
+		message.DataEnvio = dataEnvio.String
 
 		messages = append(messages, message)
 	}

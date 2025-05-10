@@ -314,12 +314,6 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 		}
 	}
 
-	amazonasLoc, err := time.LoadLocation("America/Manaus")
-	if err != nil {
-		utils.LogWarning("Error loading Amazonas timezone: %v", err)
-		amazonasLoc = time.UTC
-	}
-
 	var contactID int64
 	if contact == nil {
 		newContact := &models.Contact{
@@ -329,8 +323,8 @@ func (r *MySQLContactRepository) CreateIfNotExists(sectorID int, number string) 
 			IsActive:      true,
 			Priority:      "low",
 			ContactStatus: "Novo",
-			CreatedAt:     time.Now().In(amazonasLoc),
-			UpdatedAt:     time.Now().In(amazonasLoc),
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 			IsViewed:      false,
 		}
 

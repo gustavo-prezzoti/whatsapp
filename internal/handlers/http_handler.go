@@ -95,30 +95,34 @@ func (h *HTTPHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var req models.MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.LogError("Erro ao decodificar requisição /send-message: %v", err)
-		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Erro ao decodificar requisição: "+err.Error()))
+		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Invalid request body"))
 		return
 	}
 
-	service, err := h.connectionManager.GetConnection(req.SectorID)
+	// Validar campos obrigatórios
+	if req.SectorID == 0 || req.Recipient == "" || req.Message == "" {
+		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse("Missing required fields"))
+		return
+	}
+
+	// Obter conexão do setor
+	connection, err := h.connectionManager.GetConnection(req.SectorID)
 	if err != nil {
-		utils.LogError("Erro ao obter conexão no /send-message: %v", err)
-		models.RespondWithJSON(w, http.StatusBadRequest, models.NewErrorResponse(err.Error()))
+		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Error getting connection"))
 		return
 	}
 
-	err = service.SendMessage(req.SectorID, req.Recipient, req.Message, req.UserID, req.IsAnonymous)
+	// Enviar mensagem
+	err = connection.SendMessage(req.SectorID, req.Recipient, req.Message, req.UserID, req.IsAnonymous, req.SentAt)
 	if err != nil {
-		utils.LogError("Erro ao enviar mensagem no /send-message: %v", err)
-		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar mensagem: "+err.Error()))
+		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse(err.Error()))
 		return
 	}
 
-	data := map[string]interface{}{
-		"recipient": req.Recipient,
-		"message":   req.Message,
-	}
-	models.RespondWithJSON(w, http.StatusOK, models.NewSuccessResponse("Mensagem enviada com sucesso", data))
+	// Retornar o sentAt enviado pelo frontend na resposta
+	models.RespondWithJSON(w, http.StatusOK, models.NewSuccessResponse("Message sent successfully", map[string]interface{}{
+		"sentAt": req.SentAt,
+	}))
 }
 
 // @Summary Send an image
@@ -157,7 +161,7 @@ func (h *HTTPHandler) SendImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.SendImage(req.SectorID, req.Recipient, imageBytes, req.Caption, req.UserID, req.IsAnonymous)
+	err = service.SendImage(req.SectorID, req.Recipient, imageBytes, req.Caption, req.UserID, req.IsAnonymous, req.SentAt)
 	if err != nil {
 		utils.LogError("Erro ao enviar imagem em /send-image: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar imagem: "+err.Error()))
@@ -208,7 +212,7 @@ func (h *HTTPHandler) SendAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.SendAudio(req.SectorID, req.Recipient, audioBytes, req.UserID, req.IsAnonymous)
+	err = service.SendAudio(req.SectorID, req.Recipient, audioBytes, req.UserID, req.IsAnonymous, req.SentAt)
 	if err != nil {
 		utils.LogError("Erro ao enviar áudio em /send-audio: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar áudio: "+err.Error()))
@@ -261,7 +265,7 @@ func (h *HTTPHandler) SendDocument(w http.ResponseWriter, r *http.Request) {
 
 	utils.LogInfo("Enviando documento: %s (%d bytes)", req.FileName, len(fileBytes))
 
-	err = service.SendDocument(req.SectorID, req.Recipient, fileBytes, req.FileName, req.UserID, req.IsAnonymous)
+	err = service.SendDocument(req.SectorID, req.Recipient, fileBytes, req.FileName, req.UserID, req.IsAnonymous, req.SentAt)
 	if err != nil {
 		utils.LogError("Erro ao enviar documento em /send-document: %v", err)
 		models.RespondWithJSON(w, http.StatusInternalServerError, models.NewErrorResponse("Erro ao enviar documento: "+err.Error()))

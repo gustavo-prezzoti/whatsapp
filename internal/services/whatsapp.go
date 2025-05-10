@@ -269,7 +269,7 @@ func (s *WhatsAppService) handleDatabaseLock() error {
 	return nil
 }
 
-func (s *WhatsAppService) SendMessage(sectorID int, recipient string, message string, userID *int, isAnonymous bool) error {
+func (s *WhatsAppService) SendMessage(sectorID int, recipient string, message string, userID *int, isAnonymous bool, sentAt time.Time) error {
 	prefix := ""
 	if userID != nil && !isAnonymous {
 		user, err := s.userRepository.GetByID(*userID)
@@ -339,7 +339,7 @@ func (s *WhatsAppService) SendMessage(sectorID int, recipient string, message st
 
 	utils.LogInfo("Mensagem enviada com sucesso para %s", recipient)
 
-	err = s.SaveMessage(sectorID, recipient, message, "text", "", "", "", msg.ID, true, userID, isAnonymous)
+	err = s.SaveMessage(sectorID, recipient, message, "text", "", "", "", msg.ID, true, userID, isAnonymous, sentAt)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
 	}
@@ -412,6 +412,16 @@ func (s *WhatsAppService) markPreviousMessagesAsRead(sectorID int, contactJID st
 					mimeTypePtr = &message.MimeType
 				}
 
+				// Criar um timestamp usando a data da mensagem
+				var messageTime time.Time
+				var err error
+				// Se a mensagem.DataEnvio está no formato brasileiro DD/MM/AAAA HH:MM:SS, precisamos converter
+				messageTime, err = time.Parse("02/01/2006 15:04:05", message.DataEnvio)
+				if err != nil {
+					// Se falhar, usar a hora atual
+					messageTime = time.Now()
+				}
+
 				// Enviar WebSocket com status atualizado para "lido" (duas barras azuis)
 				wsnotify.SendMessageEvent(
 					message.ID,
@@ -422,7 +432,7 @@ func (s *WhatsAppService) markPreviousMessagesAsRead(sectorID int, contactJID st
 					urlPtr,
 					fileNamePtr,
 					mimeTypePtr,
-					message.DataEnvio,
+					messageTime,
 					message.Enviado,
 					true,              // Marcar como lida
 					models.StatusRead, // Status com duas barras azuis
@@ -440,7 +450,7 @@ func (s *WhatsAppService) markPreviousMessagesAsRead(sectorID int, contactJID st
 	}
 }
 
-func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes []byte, caption string, userID *int, isAnonymous bool) error {
+func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes []byte, caption string, userID *int, isAnonymous bool, sentAt time.Time) error {
 	conn, err := s.connectionManager.GetConnection(sectorID)
 	if err != nil {
 		return err
@@ -519,7 +529,7 @@ func (s *WhatsAppService) SendImage(sectorID int, recipient string, imageBytes [
 		}
 	}
 
-	err = s.SaveMessage(sectorID, recipient, caption, "image", s3URL, fileName, mimeType, msg.ID, true, userID, isAnonymous)
+	err = s.SaveMessage(sectorID, recipient, caption, "image", s3URL, fileName, mimeType, msg.ID, true, userID, isAnonymous, sentAt)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
 	}
@@ -705,7 +715,7 @@ func (s *WhatsAppService) generateWaveform(wavPath string) ([]byte, error) {
 	return waveform, nil
 }
 
-func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes []byte, userID *int, isAnonymous bool) error {
+func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes []byte, userID *int, isAnonymous bool, sentAt time.Time) error {
 	conn, err := s.connectionManager.GetConnection(sectorID)
 	if err != nil {
 		return err
@@ -736,7 +746,7 @@ func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes [
 	if err != nil {
 		utils.LogError("Erro ao converter áudio para OGG (Opus): %v", err)
 		// Se falhar a conversão, tentar enviar como documento
-		return s.SendDocument(sectorID, recipient, audioBytes, "audio"+filepath.Ext(mimeType), userID, isAnonymous)
+		return s.SendDocument(sectorID, recipient, audioBytes, "audio"+filepath.Ext(mimeType), userID, isAnonymous, sentAt)
 	}
 
 	fileName := fmt.Sprintf("sector_%d/audios/%d.ogg", sectorID, time.Now().UnixNano())
@@ -799,7 +809,7 @@ func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes [
 		}
 	}
 
-	err = s.SaveMessage(sectorID, recipient, "", "audio", s3URL, fileName, "audio/ogg; codecs=opus", msg.ID, true, userID, isAnonymous)
+	err = s.SaveMessage(sectorID, recipient, "", "audio", s3URL, fileName, mimeType, msg.ID, true, userID, isAnonymous, sentAt)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
 	}
@@ -815,7 +825,7 @@ func (s *WhatsAppService) SendAudio(sectorID int, recipient string, audioBytes [
 	return nil
 }
 
-func (s *WhatsAppService) SendDocument(sectorID int, recipient string, fileBytes []byte, filename string, userID *int, isAnonymous bool) error {
+func (s *WhatsAppService) SendDocument(sectorID int, recipient string, fileBytes []byte, filename string, userID *int, isAnonymous bool, sentAt time.Time) error {
 	conn, err := s.connectionManager.GetConnection(sectorID)
 	if err != nil {
 		return err
@@ -894,7 +904,7 @@ func (s *WhatsAppService) SendDocument(sectorID int, recipient string, fileBytes
 		}
 	}
 
-	err = s.SaveMessage(sectorID, recipient, filename, "document", s3URL, filename, mimeType, msg.ID, true, userID, isAnonymous)
+	err = s.SaveMessage(sectorID, recipient, filename, "document", s3URL, filename, mimeType, msg.ID, true, userID, isAnonymous, sentAt)
 	if err != nil {
 		utils.LogError("Error saving message: %v", err)
 	}
@@ -1108,48 +1118,24 @@ func (s *WhatsAppService) RestoreSession() error {
 	return nil
 }
 
-func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content string, messageType string, url string, fileName string, mimeType string, whatsappMessageID string, isFromSystem bool, userID *int, isAnonymous bool) error {
-	// Primeiro verificar se o contato já existe
-	contact, err := s.contactRepository.GetByNumber(sectorID, contactJID)
+func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content string, messageType string, url string, fileName string, mimeType string, whatsappMessageID string, isFromSystem bool, userID *int, isAnonymous bool, sentAt time.Time) error {
+	// Obter ou criar o contato
+	contact, err := s.contactRepository.CreateIfNotExists(sectorID, contactJID)
 	if err != nil {
-		return fmt.Errorf("error checking if contact exists: %v", err)
+		return fmt.Errorf("error getting/creating contact: %v", err)
 	}
 
-	// Se não existir, criar um novo
-	if contact == nil {
-		contact, err = s.contactRepository.CreateIfNotExists(sectorID, contactJID)
-		if err != nil {
-			return fmt.Errorf("error creating contact: %v", err)
-		}
-	}
-
-	// Atualizar status de visualização baseado em quem enviou a mensagem
-	if isFromSystem {
-		// Se é mensagem enviada pelo sistema, marcar como visualizada
-		err = s.contactRepository.SetViewed(sectorID, contactJID)
-	} else {
-		// Se é mensagem recebida, marcar como não visualizada
+	// Atualizar o status de visualização
+	if !isFromSystem {
+		// Se a mensagem não for do sistema, marcar como não visualizada
 		err = s.contactRepository.SetUnviewed(sectorID, contactJID)
-	}
-	if err != nil {
-		utils.LogError("Error updating viewed status: %v", err)
-	}
-
-	// Enviar uma única atualização do status de leitura após processar a mensagem
-	go func() {
-		// Pequeno atraso para garantir que todas as operações do banco sejam concluídas
-		time.Sleep(500 * time.Millisecond)
-		err := s.contactRepository.SendUnreadStatusUpdate(sectorID)
 		if err != nil {
-			utils.LogError("Error sending unread status update: %v", err)
+			utils.LogError("Error setting contact as unviewed: %v", err)
 		}
+	}
 
-		s.sendContactsList(sectorID)
-	}()
-
-	// Criar e salvar a mensagem
-	// Adicionar 1 hora ao timestamp atual
-	now := time.Now().Add(time.Hour)
+	// Converter a data para string no formato brasileiro
+	dataEnvioStr := sentAt.Format("02/01/2006 15:04:05")
 
 	message := &models.Message{
 		Conteudo:          content,
@@ -1159,14 +1145,11 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 		MimeType:          mimeType,
 		IDSetor:           sectorID,
 		ContatoID:         int64(contact.ID),
-		DataEnvio:         now,
+		DataEnvio:         dataEnvioStr,
 		Enviado:           isFromSystem,
 		Lido:              false,
 		WhatsAppMessageID: whatsappMessageID,
 		IsOfficial:        false,
-		CreatedAt:         now,
-		UserID:            userID,
-		IsAnonymous:       isAnonymous,
 	}
 
 	// Definindo o status da mensagem apenas para o WebSocket
@@ -1178,36 +1161,46 @@ func (s *WhatsAppService) SaveMessage(sectorID int, contactJID string, content s
 
 	err = s.messageRepository.Save(message)
 	if err != nil {
+		utils.LogError("Error saving message: %v, message data: %+v", err, message)
 		return fmt.Errorf("error saving message: %v", err)
 	}
 
-	// Enviar evento de mensagem via WebSocket
-	utils.LogDebug("Enviando evento de mensagem via WebSocket para setor %d", sectorID)
-	var urlPtr, fileNamePtr, mimeTypePtr *string
-	if url != "" {
-		urlPtr = &url
-	}
-	if fileName != "" {
-		fileNamePtr = &fileName
-	}
-	if mimeType != "" {
-		mimeTypePtr = &mimeType
+	// Só enviar evento de mensagem via WebSocket para mensagens recebidas (não enviadas pelo sistema)
+	if !isFromSystem {
+		utils.LogDebug("Enviando evento de mensagem via WebSocket para setor %d", sectorID)
+		var mediaUrlPtr *string
+		if url != "" {
+			mediaUrlPtr = &url
+		}
+		var fileNamePtr *string
+		if fileName != "" {
+			fileNamePtr = &fileName
+		}
+		var mimeTypePtr *string
+		if mimeType != "" {
+			mimeTypePtr = &mimeType
+		}
+
+		// Para o WebSocket, usar a hora original recebida
+		// O SendMessageEvent espera time.Time, então usamos o timestamp original
+		wsnotify.SendMessageEvent(
+			message.ID,
+			int(message.ContatoID),
+			message.IDSetor,
+			message.Conteudo,
+			message.Tipo,
+			mediaUrlPtr,
+			fileNamePtr,
+			mimeTypePtr,
+			sentAt, // Usar o timestamp original para o WebSocket
+			message.Enviado,
+			message.Lido,
+			messageStatus,
+		)
 	}
 
-	wsnotify.SendMessageEvent(
-		message.ID,
-		int(message.ContatoID),
-		message.IDSetor,
-		message.Conteudo,
-		message.Tipo,
-		urlPtr,
-		fileNamePtr,
-		mimeTypePtr,
-		message.DataEnvio,
-		message.Enviado,
-		message.Lido,
-		messageStatus,
-	)
+	// Enviar lista completa de contatos para atualizar a ordenação no frontend
+	go s.sendContactsList(sectorID)
 
 	return nil
 }
@@ -1219,6 +1212,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		utils.LogDebug("Mensagem recebida: ID=%s, IsFromMe=%v, IsGroup=%v, Sender=%s",
 			msg.Info.ID, msg.Info.IsFromMe,
 			msg.Info.IsGroup, msg.Info.Sender.String())
+
+		// Ignorar mensagens de grupos
+		if msg.Info.IsGroup {
+			utils.LogDebug("Ignorando mensagem de grupo: %s", msg.Info.ID)
+			return
+		}
 
 		senderJID := msg.Info.Sender.String()
 		normalizedJID := senderJID
@@ -1236,8 +1235,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		// Verificar se é um story pela presença de campos específicos
 		if msg.Message.GetEphemeralMessage() != nil ||
 			msg.Message.GetDeviceSentMessage() != nil ||
-			msg.Message.GetViewOnceMessage() != nil {
-			utils.LogInfo("Ignorando possível story (tipo de mensagem especial): %+v", msg.Info.ID)
+			msg.Message.GetViewOnceMessage() != nil ||
+			msg.Message.GetProtocolMessage() != nil ||
+			msg.Message.GetSenderKeyDistributionMessage() != nil ||
+			msg.Message.GetReactionMessage() != nil ||
+			msg.Message.GetKeepInChatMessage() != nil {
+			utils.LogInfo("Ignorando possível story ou mensagem especial: %+v", msg.Info.ID)
 			return
 		}
 
@@ -1245,7 +1248,12 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		messageStr := fmt.Sprintf("%+v", msg.Message)
 		if strings.Contains(messageStr, "StatusMessage") ||
 			strings.Contains(messageStr, "Story") ||
-			strings.Contains(messageStr, "status") {
+			strings.Contains(messageStr, "status") ||
+			strings.Contains(messageStr, "ProtocolMessage") ||
+			strings.Contains(messageStr, "SenderKeyDistributionMessage") ||
+			strings.Contains(messageStr, "ReactionMessage") ||
+			strings.Contains(messageStr, "KeepInChatMessage") {
+			utils.LogInfo("Ignorando mensagem de status ou sistema: %+v", msg.Info.ID)
 			return
 		}
 
@@ -1409,8 +1417,8 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		}
 
 		// Criar e salvar a mensagem
-		// Adicionar 1 hora ao timestamp atual
-		now := time.Now().Add(time.Hour)
+		// Converter o timestamp para string no formato brasileiro
+		dataEnvioStr := msg.Info.Timestamp.Format("02/01/2006 15:04:05")
 
 		message := &models.Message{
 			Conteudo:          content,
@@ -1420,17 +1428,24 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			MimeType:          mimeType,
 			IDSetor:           sectorID,
 			ContatoID:         int64(contact.ID),
-			DataEnvio:         now,
+			DataEnvio:         dataEnvioStr,
 			Enviado:           false,
 			Lido:              false,
 			WhatsAppMessageID: msg.Info.ID,
 			IsOfficial:        false,
-			CreatedAt:         now,
+		}
+
+		// Definindo o status da mensagem apenas para o WebSocket
+		messageStatus := models.StatusReceived
+		if msg.Info.IsFromMe {
+			// Mensagens enviadas pelo sistema mostram duas barras azuis (lidas)
+			messageStatus = models.StatusRead
 		}
 
 		err = s.messageRepository.Save(message)
 		if err != nil {
 			utils.LogError("Error saving received message: %v", err)
+			return
 		}
 
 		// Enviar evento WebSocket para o front apenas para mensagens recebidas
@@ -1449,9 +1464,7 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 		isSent := false
 		isRead := false
 
-		// Status da mensagem para o front
-		messageStatus := models.StatusReceived // Mensagens recebidas de clientes mostram duas barras
-
+		// Para o WebSocket, usar o timestamp original
 		wsnotify.SendMessageEvent(
 			message.ID,
 			int(message.ContatoID),
@@ -1461,7 +1474,7 @@ func (s *WhatsAppService) handleMessage(evt interface{}) {
 			mediaUrlPtr,
 			fileNamePtr,
 			mimeTypePtr,
-			message.DataEnvio,
+			msg.Info.Timestamp, // Usar timestamp original do WhatsApp
 			isSent,
 			isRead,
 			messageStatus,

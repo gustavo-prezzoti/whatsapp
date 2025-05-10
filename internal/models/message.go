@@ -18,7 +18,7 @@ type Message struct {
 	MimeType          string
 	IDSetor           int
 	ContatoID         int64
-	DataEnvio         time.Time
+	DataEnvio         string
 	Enviado           bool
 	Lido              bool
 	WhatsAppMessageID string

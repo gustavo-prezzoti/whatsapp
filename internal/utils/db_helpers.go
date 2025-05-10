@@ -22,3 +22,11 @@ func BoolToInt(b bool) int {
 	}
 	return 0
 }
+
+// GetIntFromPointer safely extracts int value from pointer
+func GetIntFromPointer(ptr *int) int {
+	if ptr == nil {
+		return 0
+	}
+	return *ptr
+}
